@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(bunx --bun shadcn@latest add table badge --overwrite)",
+      "WebFetch(domain:shadcndesign-registry.vercel.app)",
+      "Bash(bunx --bun shadcn@latest add checkbox avatar --overwrite)",
+      "Bash(bunx --bun shadcn@latest add select popover --overwrite)",
+      "Bash(bunx --bun shadcn@latest add tabs --overwrite)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}

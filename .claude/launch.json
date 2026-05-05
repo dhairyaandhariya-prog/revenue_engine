@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js (src)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "src", "dev"],
+      "port": 3000
+    }
+  ]
+}
