@@ -895,11 +895,11 @@ function IdentityCard({ user, setUser, editing }: EditableCardProps) {
 		) : undefined;
 	return (
 		<Card
-			className={cn('flex flex-col overflow-hidden', editing && 'h-full')}
-			style={editing ? { contain: 'size', containIntrinsicSize: '0 0' } : undefined}
+			className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
 		>
 			<SectionHeader icon={IdCardIcon} title="Identity Document" action={addBtn} />
-			<CardContent className={cn(editing ? 'min-h-0 flex-1 overflow-hidden' : '')}>
+			<CardContent className="min-h-0 flex-1 overflow-hidden">
 				{editing && setUser ? (
 					user.identityDocuments.length === 0 ? (
 						<EmptyHint>No documents yet. Click Add to create one.</EmptyHint>
@@ -952,18 +952,18 @@ function IdentityCard({ user, setUser, editing }: EditableCardProps) {
 				) : user.identityDocuments.length === 0 ? (
 					<EmptyHint tone="warning">Identity Document is missing.</EmptyHint>
 				) : (
-					<ul className="flex flex-col gap-3">
+					<ul className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
 						{user.identityDocuments.map((d, i) => (
 							<li
 								key={i}
-								className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3"
+								className="flex shrink-0 items-center justify-between gap-4 rounded-lg border bg-muted/30 px-4 py-3"
 							>
 								<span className="break-all font-mono text-sm font-medium text-foreground">
 									{d.code}
 								</span>
 								<Badge
 									variant="outline"
-									className="shrink-0 border-[#4664E1]/30 bg-[#4664E1]/10 text-[#4664E1] uppercase"
+									className="shrink-0 border-[#4664E1]/30 bg-[#4664E1]/10 uppercase text-[#4664E1]"
 								>
 									{identityKindLabel(d.kind)}
 								</Badge>
@@ -1004,14 +1004,17 @@ function CredentialsCard({ user, setUser, editing }: EditableCardProps) {
 	}
 
 	return (
-		<Card className="h-full">
+		<Card
+			className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+		>
 			<SectionHeader icon={KeyRoundIcon} title="Credentials" />
-			<CardContent>
+			<CardContent className="min-h-0 flex-1 overflow-hidden">
 				{editing && setUser ? (
 					user.credentials.length === 0 ? (
 						<EmptyHint>No credentials found for this user.</EmptyHint>
 					) : (
-						<ul className="flex max-h-[380px] flex-col divide-y divide-border overflow-y-auto pr-1">
+						<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 							{user.credentials.map((c, i) => {
 								const idField = credentialIdentifierField(c.kind);
 								return (
@@ -1047,7 +1050,7 @@ function CredentialsCard({ user, setUser, editing }: EditableCardProps) {
 				) : user.credentials.length === 0 ? (
 					<EmptyHint>No credentials found for this user.</EmptyHint>
 				) : (
-					<ul className="flex flex-col divide-y divide-border">
+					<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 						{user.credentials.map((c, i) => {
 							const idField = credentialIdentifierField(c.kind);
 							const value = c[idField.key] as string | undefined;
