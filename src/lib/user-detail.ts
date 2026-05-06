@@ -38,8 +38,17 @@ export type UserProfile = {
 	updatedAt: string | null; // ISO date string or null
 };
 
-export const IDENTITY_KINDS = ['CPF', 'SSN', 'Others'] as const;
-export type IdentityKind = (typeof IDENTITY_KINDS)[number];
+export const IDENTITY_KINDS = [
+	{ value: 'cpf', label: 'CPF' },
+	{ value: 'cnpj', label: 'CNPJ' },
+	{ value: 'ssn', label: 'SSN' },
+	{ value: 'other', label: 'Other' },
+] as const;
+export type IdentityKind = (typeof IDENTITY_KINDS)[number]['value'];
+
+export function identityKindLabel(kind: IdentityKind): string {
+	return IDENTITY_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
 
 export const CREDENTIAL_KINDS = [
 	{ value: 'generic', label: 'Generic' },
@@ -100,7 +109,7 @@ export type UserDetail = {
 	partnerData: PartnerData;
 	profiles: UserProfile[];
 	address: UserAddress | null;
-	identityDocument: IdentityDocument | null;
+	identityDocuments: IdentityDocument[];
 	credentials: UserCredential[];
 	subscriptions: UserSubscription[];
 	invoiceReports: InvoiceReport[];
@@ -278,6 +287,21 @@ function seed(id: string) {
 	return h;
 }
 
+// Identity-document edge-case demos for the top of the list.
+// 932304 (1st row): empty
+// 932303 (2nd row): single document
+// 932302 (3rd row): four documents (one of each kind)
+const IDENTITY_OVERRIDES: Record<string, IdentityDocument[]> = {
+	'932304': [],
+	'932303': [{ kind: 'cpf', code: '55398587277' }],
+	'932302': [
+		{ kind: 'cnpj', code: '02263723321096' },
+		{ kind: 'cpf', code: '55398587277' },
+		{ kind: 'other', code: 'HE2AJVID7' },
+		{ kind: 'ssn', code: '044346954' },
+	],
+};
+
 export function getUserDetail(id: string): UserDetail {
 	const s = seed(id);
 	const variant = s % 4;
@@ -287,6 +311,10 @@ export function getUserDetail(id: string): UserDetail {
 	const hasIdentity = variant === 1 || variant === 2;
 	const hasKiwi = variant === 0 || variant === 2;
 	const hasProfiles = variant === 1 || variant === 3;
+
+	const identityDocuments =
+		IDENTITY_OVERRIDES[id] ??
+		(hasIdentity ? [{ code: '42243216884', kind: 'cpf' as IdentityKind }] : []);
 
 	return {
 		id,
@@ -330,7 +358,7 @@ export function getUserDetail(id: string): UserDetail {
 					zip: '14408-194',
 				}
 			: null,
-		identityDocument: hasIdentity ? { code: '42243216884', kind: 'CPF' } : null,
+		identityDocuments,
 		credentials: [
 			variant === 0
 				? { kind: 'email_password', email: 'bruna.dias@playkids.com' }

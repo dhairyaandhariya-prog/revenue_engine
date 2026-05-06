@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import {
 	Building2,
 	ChevronDown,
@@ -27,6 +28,8 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebar } from '@/components/ui/sidebar';
 import {
@@ -227,7 +230,28 @@ function FooterTenantSwitcher() {
 	const { state, isMobile } = useSidebar();
 	const collapsed = state === 'collapsed' && !isMobile;
 	const [activeId, setActiveId] = React.useState<string>('playkids');
+	const [switchingTo, setSwitchingTo] = React.useState<Tenant | null>(null);
+	const switchTimerRef = React.useRef<number | null>(null);
 	const active = tenants.find((t) => t.id === activeId) ?? tenants[0];
+
+	React.useEffect(() => {
+		return () => {
+			if (switchTimerRef.current) window.clearTimeout(switchTimerRef.current);
+		};
+	}, []);
+
+	function changeTenant(nextId: string) {
+		if (nextId === activeId) return;
+		const target = tenants.find((t) => t.id === nextId);
+		if (!target) return;
+		setSwitchingTo(target);
+		if (switchTimerRef.current) window.clearTimeout(switchTimerRef.current);
+		switchTimerRef.current = window.setTimeout(() => {
+			setActiveId(nextId);
+			setSwitchingTo(null);
+			switchTimerRef.current = null;
+		}, 1500);
+	}
 
 	const button = (
 		<SidebarMenuButton
@@ -264,7 +288,7 @@ function FooterTenantSwitcher() {
 			>
 				<DropdownMenuGroup>
 					<DropdownMenuLabel>Switch tenant</DropdownMenuLabel>
-					<DropdownMenuRadioGroup value={activeId} onValueChange={setActiveId}>
+					<DropdownMenuRadioGroup value={activeId} onValueChange={changeTenant}>
 						{tenants.map((tenant) => (
 							<DropdownMenuRadioItem
 								key={tenant.id}
@@ -278,7 +302,37 @@ function FooterTenantSwitcher() {
 					</DropdownMenuRadioGroup>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>
+			{switchingTo ? <TenantSwitchingOverlay tenant={switchingTo} /> : null}
 		</DropdownMenu>
+	);
+}
+
+function TenantSwitchingOverlay({ tenant }: { tenant: Tenant }) {
+	const [mounted, setMounted] = React.useState(false);
+	React.useEffect(() => {
+		setMounted(true);
+	}, []);
+	if (!mounted) return null;
+	return createPortal(
+		<div
+			role="status"
+			aria-live="polite"
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 text-foreground backdrop-blur-sm"
+		>
+			<Empty className="w-full max-w-md rounded-xl border bg-card text-card-foreground shadow-2xl">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<Spinner className="size-6" />
+					</EmptyMedia>
+					<EmptyTitle className="text-foreground">Switching to {tenant.name}</EmptyTitle>
+					<EmptyDescription>
+						Loading the {tenant.name} workspace. Please wait while we update everything.
+						Do not refresh the page.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		</div>,
+		document.body,
 	);
 }
 

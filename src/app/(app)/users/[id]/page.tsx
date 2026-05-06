@@ -10,6 +10,8 @@ import {
 	KeyRoundIcon,
 	MapPinIcon,
 	PencilIcon,
+	PlusIcon,
+	Trash2Icon,
 	UserIcon,
 	UsersRoundIcon,
 	XIcon,
@@ -30,7 +32,9 @@ import {
 	IDENTITY_KINDS,
 	PROFILE_CHARACTERS,
 	getUserDetail,
+	identityKindLabel,
 	type CredentialKindValue,
+	type IdentityDocument,
 	type IdentityKind,
 	type InvoiceReport,
 	type PartnerData,
@@ -45,9 +49,10 @@ type Params = Promise<{ id: string }>;
 
 type LayoutMode = 'merged' | 'tabs-old' | 'bento-old';
 
+// Old-design demos live at the bottom of the list (lowest IDs).
 const LAYOUT_OVERRIDES: Record<string, LayoutMode> = {
-	'932302': 'tabs-old',
-	'932301': 'bento-old',
+	'932294': 'tabs-old',
+	'932293': 'bento-old',
 };
 
 const tabTriggerClass = 'data-active:text-[#224089] after:bg-[#224089] dark:data-active:text-[#4664E1]';
@@ -857,60 +862,114 @@ function AddressCard({ user, setUser, editing }: EditableCardProps) {
 // ───────────────────────────── Identity Document ─────────────────────────────
 
 function IdentityCard({ user, setUser, editing }: EditableCardProps) {
-	const doc = user.identityDocument ?? { code: '', kind: 'CPF' as IdentityKind };
+	function addDocument() {
+		setUser?.((p) => ({
+			...p,
+			identityDocuments: [...p.identityDocuments, { code: '', kind: 'cpf' as IdentityKind }],
+		}));
+	}
+	function removeDocument(idx: number) {
+		setUser?.((p) => ({
+			...p,
+			identityDocuments: p.identityDocuments.filter((_, i) => i !== idx),
+		}));
+	}
+	function updateDocument(idx: number, patch: Partial<IdentityDocument>) {
+		setUser?.((p) => ({
+			...p,
+			identityDocuments: p.identityDocuments.map((d, i) => (i === idx ? { ...d, ...patch } : d)),
+		}));
+	}
+	const addBtn =
+		editing && setUser ? (
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				className="h-8"
+				onClick={addDocument}
+			>
+				<PlusIcon />
+				Add
+			</Button>
+		) : undefined;
 	return (
-		<Card className="h-full">
-			<SectionHeader icon={IdCardIcon} title="Identity Document" />
-			<CardContent>
+		<Card
+			className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+		>
+			<SectionHeader icon={IdCardIcon} title="Identity Document" action={addBtn} />
+			<CardContent className="min-h-0 flex-1 overflow-hidden">
 				{editing && setUser ? (
-					<div className="flex flex-col gap-5">
-						<FormRow label="Identity Code">
-							<Input
-								value={doc.code}
-								onChange={(e) =>
-									setUser((p) => ({
-										...p,
-										identityDocument: { code: e.target.value, kind: doc.kind },
-									}))
-								}
-							/>
-						</FormRow>
-						<FormRow label="Kind">
-							<Select
-								value={doc.kind}
-								onValueChange={(v) =>
-									setUser((p) => ({
-										...p,
-										identityDocument: { code: doc.code, kind: v as IdentityKind },
-									}))
-								}
-							>
-								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Identity kind" />
-								</SelectTrigger>
-								<SelectContent>
-									{IDENTITY_KINDS.map((k) => (
-										<SelectItem key={k} value={k}>
-											{k}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</FormRow>
-					</div>
-				) : !user.identityDocument ? (
+					user.identityDocuments.length === 0 ? (
+						<EmptyHint>No documents yet. Click Add to create one.</EmptyHint>
+					) : (
+						<ul className="flex h-full flex-col gap-4 overflow-y-auto pr-1">
+							{user.identityDocuments.map((d, i) => (
+								<li key={i} className="flex flex-col gap-3 rounded-lg border p-3">
+									<div className="flex items-center justify-between border-b pb-3">
+										<span className="text-sm font-medium text-muted-foreground">
+											Document {i + 1}
+										</span>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon-sm"
+											className="size-7 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+											onClick={() => removeDocument(i)}
+											aria-label={`Remove document ${i + 1}`}
+										>
+											<Trash2Icon />
+										</Button>
+									</div>
+									<FormRow label="Kind">
+										<Select
+											value={d.kind}
+											onValueChange={(v) => updateDocument(i, { kind: v as IdentityKind })}
+										>
+											<SelectTrigger className="w-full">
+												<SelectValue placeholder="Identity kind" />
+											</SelectTrigger>
+											<SelectContent>
+												{IDENTITY_KINDS.map((k) => (
+													<SelectItem key={k.value} value={k.value}>
+														{k.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</FormRow>
+									<FormRow label="Identity Code">
+										<Input
+											value={d.code}
+											onChange={(e) => updateDocument(i, { code: e.target.value })}
+										/>
+									</FormRow>
+								</li>
+							))}
+						</ul>
+					)
+				) : user.identityDocuments.length === 0 ? (
 					<EmptyHint tone="warning">Identity Document is missing.</EmptyHint>
 				) : (
-					<div className="flex flex-col gap-5">
-						<ReadField label="Identity Code">
-							<span className="font-mono">{user.identityDocument.code}</span>
-						</ReadField>
-						<ReadField label="Kind">
-							<Badge variant="outline" className="border-[#4664E1]/30 bg-[#4664E1]/10 text-[#4664E1]">
-								{user.identityDocument.kind}
-							</Badge>
-						</ReadField>
-					</div>
+					<ul className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
+						{user.identityDocuments.map((d, i) => (
+							<li
+								key={i}
+								className="flex shrink-0 items-center justify-between gap-4 rounded-lg border bg-muted/30 px-4 py-3"
+							>
+								<span className="break-all font-mono text-sm font-medium text-foreground">
+									{d.code}
+								</span>
+								<Badge
+									variant="outline"
+									className="shrink-0 border-[#4664E1]/30 bg-[#4664E1]/10 uppercase text-[#4664E1]"
+								>
+									{identityKindLabel(d.kind)}
+								</Badge>
+							</li>
+						))}
+					</ul>
 				)}
 			</CardContent>
 		</Card>
@@ -945,14 +1004,17 @@ function CredentialsCard({ user, setUser, editing }: EditableCardProps) {
 	}
 
 	return (
-		<Card className="h-full">
+		<Card
+			className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+		>
 			<SectionHeader icon={KeyRoundIcon} title="Credentials" />
-			<CardContent>
+			<CardContent className="min-h-0 flex-1 overflow-hidden">
 				{editing && setUser ? (
 					user.credentials.length === 0 ? (
 						<EmptyHint>No credentials found for this user.</EmptyHint>
 					) : (
-						<ul className="flex max-h-[380px] flex-col divide-y divide-border overflow-y-auto pr-1">
+						<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 							{user.credentials.map((c, i) => {
 								const idField = credentialIdentifierField(c.kind);
 								return (
@@ -988,7 +1050,7 @@ function CredentialsCard({ user, setUser, editing }: EditableCardProps) {
 				) : user.credentials.length === 0 ? (
 					<EmptyHint>No credentials found for this user.</EmptyHint>
 				) : (
-					<ul className="flex flex-col divide-y divide-border">
+					<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 						{user.credentials.map((c, i) => {
 							const idField = credentialIdentifierField(c.kind);
 							const value = c[idField.key] as string | undefined;
