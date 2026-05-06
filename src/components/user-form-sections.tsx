@@ -38,7 +38,7 @@ export type NewUserFormValue = {
 	lastName: string;
 	kiwiLegacyAccountUuid: string;
 	isActive: boolean;
-	identityDocument: IdentityDocument;
+	identityDocuments: IdentityDocument[];
 	credentials: UserCredential[];
 	profiles: UserProfile[];
 	address: UserAddress;
@@ -50,7 +50,7 @@ export const EMPTY_USER_FORM: NewUserFormValue = {
 	lastName: '',
 	kiwiLegacyAccountUuid: '',
 	isActive: true,
-	identityDocument: { code: '', kind: 'CPF' },
+	identityDocuments: [],
 	credentials: [{ kind: 'email_password', email: '' }],
 	profiles: [],
 	address: { line1: '', city: '', cityCode: '', state: '', country: '', zip: '' },
@@ -262,41 +262,87 @@ function DetailsCard({ value, onChange }: Props) {
 }
 
 function IdentityCard({ value, onChange }: Props) {
-	const doc = value.identityDocument;
+	function addDocument() {
+		onChange((p) => ({
+			...p,
+			identityDocuments: [...p.identityDocuments, { code: '', kind: 'cpf' as IdentityKind }],
+		}));
+	}
+	function removeDocument(idx: number) {
+		onChange((p) => ({
+			...p,
+			identityDocuments: p.identityDocuments.filter((_, i) => i !== idx),
+		}));
+	}
+	function updateDocument(idx: number, patch: Partial<IdentityDocument>) {
+		onChange((p) => ({
+			...p,
+			identityDocuments: p.identityDocuments.map((d, i) =>
+				i === idx ? { ...d, ...patch } : d,
+			),
+		}));
+	}
+	const addBtn = (
+		<Button type="button" variant="outline" size="sm" className="h-8" onClick={addDocument}>
+			<PlusIcon />
+			Add
+		</Button>
+	);
 	return (
-		<Card className="h-full">
-			<SectionHeader icon={IdCardIcon} title="Identity Document" />
-			<CardContent className="flex flex-col gap-5">
-				<FormRow label="Identity Code">
-					<Input
-						value={doc.code}
-						onChange={(e) =>
-							onChange((p) => ({ ...p, identityDocument: { ...p.identityDocument, code: e.target.value } }))
-						}
-					/>
-				</FormRow>
-				<FormRow label="Kind">
-					<Select
-						value={doc.kind}
-						onValueChange={(v) =>
-							onChange((p) => ({
-								...p,
-								identityDocument: { ...p.identityDocument, kind: v as IdentityKind },
-							}))
-						}
-					>
-						<SelectTrigger className="w-full">
-							<SelectValue placeholder="Identity kind" />
-						</SelectTrigger>
-						<SelectContent>
-							{IDENTITY_KINDS.map((k) => (
-								<SelectItem key={k} value={k}>
-									{k}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</FormRow>
+		<Card
+			className="flex h-full flex-col overflow-hidden"
+			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+		>
+			<SectionHeader icon={IdCardIcon} title="Identity Document" action={addBtn} />
+			<CardContent className="min-h-0 flex-1 overflow-hidden">
+				{value.identityDocuments.length === 0 ? (
+					<EmptyHint>No documents yet. Click Add to create one.</EmptyHint>
+				) : (
+					<ul className="flex h-full flex-col gap-4 overflow-y-auto pr-1">
+						{value.identityDocuments.map((d, i) => (
+							<li key={i} className="flex flex-col gap-3 rounded-lg border p-3">
+								<div className="flex items-center justify-between border-b pb-3">
+									<span className="text-sm font-medium text-muted-foreground">
+										Document {i + 1}
+									</span>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon-sm"
+										className="size-7 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+										onClick={() => removeDocument(i)}
+										aria-label={`Remove document ${i + 1}`}
+									>
+										<Trash2Icon />
+									</Button>
+								</div>
+								<FormRow label="Kind">
+									<Select
+										value={d.kind}
+										onValueChange={(v) => updateDocument(i, { kind: v as IdentityKind })}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Identity kind" />
+										</SelectTrigger>
+										<SelectContent>
+											{IDENTITY_KINDS.map((k) => (
+												<SelectItem key={k.value} value={k.value}>
+													{k.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</FormRow>
+								<FormRow label="Identity Code">
+									<Input
+										value={d.code}
+										onChange={(e) => updateDocument(i, { code: e.target.value })}
+									/>
+								</FormRow>
+							</li>
+						))}
+					</ul>
+				)}
 			</CardContent>
 		</Card>
 	);
