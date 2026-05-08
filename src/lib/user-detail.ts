@@ -302,7 +302,126 @@ const IDENTITY_OVERRIDES: Record<string, IdentityDocument[]> = {
 	],
 };
 
+// Old-design comparison users at the bottom of the list.
+// 932294 (tabs-old) → empty state demo
+// 932293 (bento-old) → fully filled state demo
+function emptyUser(id: string): UserDetail {
+	return {
+		id,
+		firstName: null,
+		lastName: null,
+		kiwiLegacyAccountUuid: null,
+		isActive: false,
+		createdAt: '2026-03-18T21:05:17.793890+00:00',
+		updatedAt: null,
+		partnerData: {},
+		profiles: [],
+		address: null,
+		identityDocuments: [],
+		credentials: [],
+		subscriptions: [],
+		invoiceReports: [],
+	};
+}
+
+function filledUser(id: string): UserDetail {
+	return {
+		id,
+		firstName: 'Bruna',
+		lastName: 'Dias',
+		kiwiLegacyAccountUuid: 'c1e8d5b7-9a3f-4d2c-8e6b-7d4a1f9c2e5b',
+		isActive: true,
+		createdAt: '2024-11-01T09:30:00.000000+00:00',
+		updatedAt: '2026-05-04T11:22:33.000000+00:00',
+		partnerData: {
+			stripeCustomerId: 'cus_PnZ2k7M3Lr5Xg9aB',
+			vindiCustomerId: 'V-4892173',
+			vizioCustomerId: 'VIZ-77291',
+			minuUserIdentity: 'minu-3942',
+			wisterUserId: 'WST-5571',
+			samsungGalaxyStoreAccountId: 'SGS-99812',
+			samsungTvCustomerId: 'STV-44120',
+			sankhyaUserId: 'SNK-88210',
+			lgUserId: 'LG-21073',
+		},
+		profiles: [
+			{
+				id: 'p1',
+				name: 'Testinho Jr',
+				character: 'Junior',
+				birthdate: '2020-12-31',
+				createdAt: '2021-01-15',
+				updatedAt: '2024-08-02',
+			},
+			{
+				id: 'p2',
+				name: 'Testinho Mid',
+				character: 'Mimi',
+				birthdate: '2015-12-31',
+				createdAt: '2016-02-04',
+				updatedAt: null,
+			},
+			{
+				id: 'p3',
+				name: 'Testinho Sr',
+				character: 'Kate',
+				birthdate: '2010-06-12',
+				createdAt: '2010-07-01',
+				updatedAt: '2024-08-02',
+			},
+		],
+		address: {
+			line1: 'Rua Blandina Gomes Junqueira, Loteamento Quinta do Oeste - 123',
+			city: 'Franca',
+			cityCode: '3516200',
+			state: 'SP',
+			country: 'BR',
+			zip: '14408-194',
+		},
+		identityDocuments: [
+			{ kind: 'cnpj', code: '02263723321096' },
+			{ kind: 'cpf', code: '55398587277' },
+			{ kind: 'ssn', code: '044346954' },
+		],
+		credentials: [
+			{ kind: 'email_password', email: 'bruna.dias@playkids.com' },
+			{ kind: 'apple_login', appleId: '001234.bruna.dias' },
+			{ kind: 'phone_number', phoneNumber: '+55 11 98765-4321' },
+		],
+		subscriptions: buildSubscriptions(0),
+		invoiceReports: [
+			{
+				id: '9797',
+				orderNumber: '40274998',
+				subscriptionPeriodId: '20370916',
+				subscriptionPeriodStart: '2026-05-01T18:24:52.179413',
+				subscriptionPeriodEnd: '2026-06-01T18:24:52.179413',
+				transactionId: '5147071',
+				isConfirmed: true,
+				isSent: true,
+				createdAt: '2026-04-30T13:05:10.714332+00:00',
+				updatedAt: '2026-04-30T13:05:16.045021+00:00',
+			},
+			{
+				id: '8126',
+				orderNumber: '39584776',
+				subscriptionPeriodId: '17068133',
+				subscriptionPeriodStart: '2026-03-31T18:24:52.179395',
+				subscriptionPeriodEnd: '2026-05-01T18:24:52.179413',
+				transactionId: '4862109',
+				isConfirmed: true,
+				isSent: true,
+				createdAt: '2026-03-31T18:30:07.577937+00:00',
+				updatedAt: '2026-03-31T18:30:20.034620+00:00',
+			},
+		],
+	};
+}
+
 export function getUserDetail(id: string): UserDetail {
+	if (id === '932294') return emptyUser(id);
+	if (id === '932293') return filledUser(id);
+
 	const s = seed(id);
 	const variant = s % 4;
 
