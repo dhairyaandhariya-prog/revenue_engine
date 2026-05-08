@@ -50,12 +50,14 @@ type Params = Promise<{ id: string }>;
 
 type LayoutMode = 'merged' | 'tabs-old' | 'bento-old' | 'compact';
 
-// Old-design demos live at the bottom of the list (lowest IDs).
-// 932302: compact field layout (multi-column grids inside Details / Address etc.)
+// Iteration mapping (rows ordered ascending by ID; default sort is ascending).
+// 932303 (row 3): compact field layout (multi-column grids inside Details / Address)
+// 932311 (row 11): old 8-tab layout (empty state demo)
+// 932312 (row 12): old bento mosaic layout (fully filled state demo)
 const LAYOUT_OVERRIDES: Record<string, LayoutMode> = {
-	'932302': 'compact',
-	'932294': 'tabs-old',
-	'932293': 'bento-old',
+	'932303': 'compact',
+	'932311': 'tabs-old',
+	'932312': 'bento-old',
 };
 
 const tabTriggerClass = 'data-active:text-[#224089] after:bg-[#224089] dark:data-active:text-[#4664E1]';

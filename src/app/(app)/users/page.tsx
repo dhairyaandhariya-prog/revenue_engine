@@ -27,34 +27,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 type Status = 'Active' | 'Inactive';
 
-type SubscriptionKind =
-	| 'app_store'
-	| 'digible'
-	| 'daileon'
-	| 'legacy_giftcard'
-	| 'google_play'
-	| 'legacy_internal'
-	| 'playhub'
-	| 'sky'
-	| 'stripe'
-	| 'vindi'
-	| 'vizio'
-	| 'lg'
-	| 'samsung_tv'
-	| 'wister'
-	| 'lifecycle_free'
-	| 'market_one'
-	| 'minu'
-	| 'roku'
-	| 'viu'
-	| 'samsung_galaxy_store';
-
 type UserRow = {
 	id: string;
+	firstName: string | null;
+	lastName: string | null;
 	identityCode: string | null;
-	kiwiLegacyAccount: string | null;
-	kind: SubscriptionKind;
-	subscriptionStatus: Status;
 	userStatus: Status;
 };
 
@@ -62,27 +39,28 @@ const TOTAL_RECORDS = 930_404;
 const PAGE_SIZE = 12;
 
 const baseUsers: UserRow[] = [
-	{ id: '932304', identityCode: null, kiwiLegacyAccount: null, kind: 'viu', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932303', identityCode: null, kiwiLegacyAccount: null, kind: 'app_store', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932302', identityCode: null, kiwiLegacyAccount: '00004252-fce6-4248-8a8b-ad64094f62df', kind: 'google_play', subscriptionStatus: 'Inactive', userStatus: 'Active' },
-	{ id: '932301', identityCode: null, kiwiLegacyAccount: null, kind: 'stripe', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932300', identityCode: null, kiwiLegacyAccount: '9f3e2a14-7c5b-4d1a-9e8f-2b6c4d8a1f93', kind: 'vizio', subscriptionStatus: 'Active', userStatus: 'Inactive' },
-	{ id: '932299', identityCode: '42549404084', kiwiLegacyAccount: null, kind: 'playhub', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932298', identityCode: null, kiwiLegacyAccount: null, kind: 'roku', subscriptionStatus: 'Inactive', userStatus: 'Inactive' },
-	{ id: '932297', identityCode: null, kiwiLegacyAccount: null, kind: 'sky', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932296', identityCode: null, kiwiLegacyAccount: '5a8b9c7d-3e1f-4a2c-b6d8-1e7f3a5b9c4d', kind: 'legacy_internal', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932295', identityCode: '38217695501', kiwiLegacyAccount: null, kind: 'daileon', subscriptionStatus: 'Active', userStatus: 'Active' },
-	{ id: '932294', identityCode: null, kiwiLegacyAccount: null, kind: 'app_store', subscriptionStatus: 'Inactive', userStatus: 'Active' },
-	{ id: '932293', identityCode: null, kiwiLegacyAccount: 'c1e8d5b7-9a3f-4d2c-8e6b-7d4a1f9c2e5b', kind: 'samsung_tv', subscriptionStatus: 'Active', userStatus: 'Active' },
+	{ id: '932301', firstName: 'rodrigo', lastName: 'p', identityCode: null, userStatus: 'Active' },
+	{ id: '932302', firstName: 'rodrigo', lastName: 'p', identityCode: '55398587277', userStatus: 'Active' },
+	{ id: '932303', firstName: 'rodrigo', lastName: 'p', identityCode: '02263723321096', userStatus: 'Active' },
+	{ id: '932304', firstName: 'maria', lastName: 'silva', identityCode: null, userStatus: 'Active' },
+	{ id: '932305', firstName: 'joão', lastName: 'santos', identityCode: null, userStatus: 'Inactive' },
+	{ id: '932306', firstName: 'rodrigo', lastName: 'p', identityCode: '42549404084', userStatus: 'Active' },
+	{ id: '932307', firstName: 'ana', lastName: 'costa', identityCode: null, userStatus: 'Inactive' },
+	{ id: '932308', firstName: 'rodrigo', lastName: 'p', identityCode: null, userStatus: 'Active' },
+	{ id: '932309', firstName: 'pedro', lastName: 'oliveira', identityCode: null, userStatus: 'Active' },
+	{ id: '932310', firstName: 'lucas', lastName: 'mendes', identityCode: '38217695501', userStatus: 'Active' },
+	{ id: '932311', firstName: null, lastName: null, identityCode: null, userStatus: 'Inactive' },
+	{ id: '932312', firstName: 'Bruna', lastName: 'Dias', identityCode: '55398587277', userStatus: 'Active' },
 ];
 
 const FILTER_FIELDS = [
 	{ value: 'id', label: 'ID' },
+	{ value: 'first_name', label: 'First Name' },
+	{ value: 'last_name', label: 'Last Name' },
 	{ value: 'is_active', label: 'Is Active' },
-	{ value: 'credential_kind', label: 'Credential Kind' },
-	{ value: 'email', label: 'Email' },
 	{ value: 'identity_code', label: 'Identity Code' },
-	{ value: 'transaction_id', label: 'TransactionID' },
+	{ value: 'email', label: 'Email' },
+	{ value: 'transaction_id', label: 'Transaction ID' },
 	{ value: 'phone_number', label: 'Phone Number' },
 ];
 
@@ -114,14 +92,6 @@ function StatusBadge({ status }: { status: Status }) {
 	);
 }
 
-function KindTag({ kind }: { kind: SubscriptionKind }) {
-	return (
-		<Badge variant="outline" className="border-border bg-muted/40 text-foreground/80">
-			{kind}
-		</Badge>
-	);
-}
-
 // Lightweight fuzzy match: every char of needle appears in haystack in order.
 function fuzzyMatch(needle: string, haystack: string) {
 	if (!needle) return true;
@@ -137,7 +107,7 @@ function fuzzyMatch(needle: string, haystack: string) {
 
 function rowMatches(u: UserRow, q: string) {
 	if (!q) return true;
-	return [u.id, u.identityCode ?? '', u.kiwiLegacyAccount ?? '', u.kind, u.subscriptionStatus, u.userStatus]
+	return [u.id, u.firstName ?? '', u.lastName ?? '', u.identityCode ?? '', u.userStatus]
 		.some((s) => fuzzyMatch(q, s));
 }
 
@@ -145,14 +115,16 @@ function fieldValue(u: UserRow, field: string): string | null {
 	switch (field) {
 		case 'id':
 			return u.id;
+		case 'first_name':
+			return u.firstName;
+		case 'last_name':
+			return u.lastName;
 		case 'identity_code':
 			return u.identityCode;
-		case 'credential_kind':
-			return u.kind;
 		case 'is_active':
 			return u.userStatus === 'Active' ? 'true' : 'false';
 		default:
-			// Email / TransactionID / Phone Number are not on the users mock — treat as null.
+			// Email / Transaction ID / Phone Number are not on the users mock — treat as null.
 			return null;
 	}
 }
@@ -194,14 +166,14 @@ function passesFilters(u: UserRow, rows: FilterRow[]): boolean {
 	return result;
 }
 
-type SortKey = 'id' | 'identityCode' | 'kiwiLegacyAccount' | 'kind' | 'subscriptionStatus' | 'userStatus';
+type SortKey = 'id' | 'firstName' | 'lastName' | 'identityCode' | 'userStatus';
 
 export default function UsersPage() {
 	const [selected, setSelected] = React.useState<Set<string>>(new Set());
 	const [page, setPage] = React.useState(1);
 	const [search, setSearch] = React.useState('');
 	const [sortKey, setSortKey] = React.useState<SortKey>('id');
-	const [sortDir, setSortDir] = React.useState<SortDir>('desc');
+	const [sortDir, setSortDir] = React.useState<SortDir>('asc');
 	const [filters, setFilters] = React.useState<FilterRow[]>([]);
 	const [filterOpen, setFilterOpen] = React.useState(false);
 
@@ -356,26 +328,23 @@ export default function UsersPage() {
 									</TableHead>
 									<TableHead>
 										<SortableHead
+											label="First Name"
+											dir={dirFor('firstName')}
+											onChange={headSetter('firstName')}
+										/>
+									</TableHead>
+									<TableHead>
+										<SortableHead
+											label="Last Name"
+											dir={dirFor('lastName')}
+											onChange={headSetter('lastName')}
+										/>
+									</TableHead>
+									<TableHead>
+										<SortableHead
 											label="Identity Code"
 											dir={dirFor('identityCode')}
 											onChange={headSetter('identityCode')}
-										/>
-									</TableHead>
-									<TableHead>
-										<SortableHead
-											label="Kiwi Legacy Account"
-											dir={dirFor('kiwiLegacyAccount')}
-											onChange={headSetter('kiwiLegacyAccount')}
-										/>
-									</TableHead>
-									<TableHead>
-										<SortableHead label="Kind" dir={dirFor('kind')} onChange={headSetter('kind')} />
-									</TableHead>
-									<TableHead>
-										<SortableHead
-											label="Subscription Status"
-											dir={dirFor('subscriptionStatus')}
-											onChange={headSetter('subscriptionStatus')}
 										/>
 									</TableHead>
 									<TableHead>
@@ -408,17 +377,14 @@ export default function UsersPage() {
 													{u.id}
 												</a>
 											</TableCell>
+											<TableCell className="text-sm">
+												{u.firstName ?? <span className="text-muted-foreground/60">—</span>}
+											</TableCell>
+											<TableCell className="text-sm">
+												{u.lastName ?? <span className="text-muted-foreground/60">—</span>}
+											</TableCell>
 											<TableCell className="text-xs">
 												{u.identityCode ?? <span className="text-muted-foreground/60">—</span>}
-											</TableCell>
-											<TableCell className="text-xs">
-												{u.kiwiLegacyAccount ?? <span className="text-muted-foreground/60">—</span>}
-											</TableCell>
-											<TableCell>
-												<KindTag kind={u.kind} />
-											</TableCell>
-											<TableCell>
-												<StatusBadge status={u.subscriptionStatus} />
 											</TableCell>
 											<TableCell>
 												<StatusBadge status={u.userStatus} />
@@ -451,7 +417,7 @@ export default function UsersPage() {
 								})}
 								{users.length === 0 ? (
 									<TableRow>
-										<TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+										<TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
 											No users match your search.
 										</TableCell>
 									</TableRow>

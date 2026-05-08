@@ -288,13 +288,13 @@ function seed(id: string) {
 }
 
 // Identity-document edge-case demos for the top of the list.
-// 932304 (1st row): empty
-// 932303 (2nd row): single document
-// 932302 (3rd row): four documents (one of each kind)
+// 932301 (1st row): empty
+// 932302 (2nd row): single document
+// 932303 (3rd row): four documents (one of each kind)
 const IDENTITY_OVERRIDES: Record<string, IdentityDocument[]> = {
-	'932304': [],
-	'932303': [{ kind: 'cpf', code: '55398587277' }],
-	'932302': [
+	'932301': [],
+	'932302': [{ kind: 'cpf', code: '55398587277' }],
+	'932303': [
 		{ kind: 'cnpj', code: '02263723321096' },
 		{ kind: 'cpf', code: '55398587277' },
 		{ kind: 'other', code: 'HE2AJVID7' },
@@ -303,8 +303,8 @@ const IDENTITY_OVERRIDES: Record<string, IdentityDocument[]> = {
 };
 
 // Old-design comparison users at the bottom of the list.
-// 932294 (tabs-old) → empty state demo
-// 932293 (bento-old) → fully filled state demo
+// 932311 (tabs-old) → empty state demo
+// 932312 (bento-old) → fully filled state demo
 function emptyUser(id: string): UserDetail {
 	return {
 		id,
@@ -419,8 +419,8 @@ function filledUser(id: string): UserDetail {
 }
 
 export function getUserDetail(id: string): UserDetail {
-	if (id === '932294') return emptyUser(id);
-	if (id === '932293') return filledUser(id);
+	if (id === '932311') return emptyUser(id);
+	if (id === '932312') return filledUser(id);
 
 	const s = seed(id);
 	const variant = s % 4;
