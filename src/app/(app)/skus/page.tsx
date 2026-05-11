@@ -18,6 +18,7 @@ import {
 import { AdvancedFilter, type FilterRow } from '@/components/advanced-filter';
 import { PageHeader } from '@/components/page-header';
 import { SortableHead, type SortDir } from '@/components/sortable-head';
+import { useTenant } from '@/components/tenant-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,10 +34,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
 	BILLING_CYCLES,
-	TENANT_BRANDS,
 	billingShort,
 	formatPrice,
-	getBrand,
 	listSkus,
 	trialSummary,
 	type Sku,
@@ -48,7 +47,6 @@ const PAGE_SIZE = 12;
 const FILTER_FIELDS = [
 	{ value: 'sku_id', label: 'SKU ID' },
 	{ value: 'name', label: 'Name' },
-	{ value: 'tenant', label: 'Brand' },
 	{ value: 'billing_cycle', label: 'Billing Cycle' },
 	{ value: 'status', label: 'Status' },
 	{ value: 'trial_type', label: 'Trial Type' },
@@ -84,22 +82,6 @@ function StatusBadge({ status }: { status: SkuStatus }) {
 	);
 }
 
-function BrandChip({ tenantId }: { tenantId: string }) {
-	const brand = getBrand(tenantId);
-	if (!brand) return <span className="text-muted-foreground/60">—</span>;
-	return (
-		<span className="inline-flex items-center gap-1.5">
-			<span
-				className="flex size-5 items-center justify-center rounded text-[10px] font-semibold text-white"
-				style={{ backgroundColor: brand.color }}
-			>
-				{brand.name[0]}
-			</span>
-			<span className="text-sm font-medium text-foreground">{brand.name}</span>
-		</span>
-	);
-}
-
 function fuzzyMatch(needle: string, haystack: string) {
 	if (!needle) return true;
 	const n = needle.toLowerCase();
@@ -114,9 +96,7 @@ function fuzzyMatch(needle: string, haystack: string) {
 
 function rowMatches(s: Sku, q: string) {
 	if (!q) return true;
-	return [s.skuId, s.name, s.description, getBrand(s.tenantId)?.name ?? ''].some((v) =>
-		fuzzyMatch(q, v),
-	);
+	return [s.skuId, s.name].some((v) => fuzzyMatch(q, v));
 }
 
 function fieldValue(s: Sku, field: string): string | null {
@@ -125,8 +105,6 @@ function fieldValue(s: Sku, field: string): string | null {
 			return s.skuId;
 		case 'name':
 			return s.name;
-		case 'tenant':
-			return s.tenantId;
 		case 'billing_cycle':
 			return s.billingCycle;
 		case 'status':
@@ -177,9 +155,10 @@ function passesFilters(s: Sku, rows: FilterRow[]): boolean {
 	return result;
 }
 
-type SortKey = 'skuId' | 'name' | 'tenantId' | 'billingCycle' | 'status';
+type SortKey = 'skuId' | 'name' | 'billingCycle' | 'status';
 
 export default function SkusPage() {
+	const { activeId: tenantId, active: tenant } = useTenant();
 	const [selected, setSelected] = React.useState<Set<string>>(new Set());
 	const [page, setPage] = React.useState(1);
 	const [search, setSearch] = React.useState('');
@@ -187,7 +166,6 @@ export default function SkusPage() {
 	const [sortDir, setSortDir] = React.useState<SortDir>('asc');
 	const [filters, setFilters] = React.useState<FilterRow[]>([]);
 	const [filterOpen, setFilterOpen] = React.useState(false);
-	const [brandFilter, setBrandFilter] = React.useState<string>('all');
 	const [statusFilter, setStatusFilter] = React.useState<'all' | SkuStatus>('all');
 
 	function setSort(key: SortKey, dir: SortDir) {
@@ -195,11 +173,10 @@ export default function SkusPage() {
 		setSortDir(dir);
 	}
 
-	const baseSkus = React.useMemo(() => listSkus(), []);
+	const baseSkus = React.useMemo(() => listSkus().filter((s) => s.tenantId === tenantId), [tenantId]);
 
 	const skus = React.useMemo(() => {
 		const rows = baseSkus
-			.filter((s) => (brandFilter === 'all' ? true : s.tenantId === brandFilter))
 			.filter((s) => (statusFilter === 'all' ? true : s.status === statusFilter))
 			.filter((s) => rowMatches(s, search) && passesFilters(s, filters));
 		if (sortDir === null) return rows;
@@ -209,7 +186,7 @@ export default function SkusPage() {
 			const bv = String(b[sortKey] ?? '');
 			return av.localeCompare(bv, undefined, { numeric: true }) * dir;
 		});
-	}, [baseSkus, search, sortKey, sortDir, filters, brandFilter, statusFilter]);
+	}, [baseSkus, search, sortKey, sortDir, filters, statusFilter]);
 
 	const totalRecords = skus.length;
 	const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
@@ -248,6 +225,14 @@ export default function SkusPage() {
 						<Badge variant="secondary" className="rounded-full px-2 font-medium tabular-nums">
 							{baseSkus.length.toLocaleString()}
 						</Badge>
+						<span className="ml-1 inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-xs">
+							<span
+								className="size-1.5 rounded-full"
+								style={{ backgroundColor: tenant.color }}
+								aria-hidden
+							/>
+							<span className="font-medium text-foreground">{tenant.name}</span>
+						</span>
 					</div>
 					<div className="flex flex-wrap items-center justify-between gap-3">
 						<div className="flex flex-wrap items-center gap-2">
@@ -270,24 +255,11 @@ export default function SkusPage() {
 									</button>
 								) : null}
 							</div>
-							<Select value={brandFilter} onValueChange={setBrandFilter}>
-								<SelectTrigger size="sm" className="h-9 min-w-[160px]">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All brands</SelectItem>
-									{TENANT_BRANDS.map((b) => (
-										<SelectItem key={b.id} value={b.id}>
-											{b.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
 							<Select
 								value={statusFilter}
 								onValueChange={(v) => setStatusFilter(v as 'all' | SkuStatus)}
 							>
-								<SelectTrigger size="sm" className="h-9 min-w-[140px]">
+								<SelectTrigger className="!h-9 min-w-[140px]">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -378,22 +350,15 @@ export default function SkusPage() {
 									<TableHead>
 										<SortableHead label="Name" dir={dirFor('name')} onChange={headSetter('name')} />
 									</TableHead>
-									<TableHead className="w-[160px]">
-										<SortableHead
-											label="Brand"
-											dir={dirFor('tenantId')}
-											onChange={headSetter('tenantId')}
-										/>
-									</TableHead>
-									<TableHead className="w-[120px]">
+									<TableHead className="w-[140px]">
 										<SortableHead
 											label="Cycle"
 											dir={dirFor('billingCycle')}
 											onChange={headSetter('billingCycle')}
 										/>
 									</TableHead>
-									<TableHead className="w-[160px]">Price</TableHead>
-									<TableHead className="w-[160px]">Trial</TableHead>
+									<TableHead className="w-[180px]">Price</TableHead>
+									<TableHead className="w-[180px]">Trial</TableHead>
 									<TableHead className="w-[120px]">
 										<SortableHead
 											label="Status"
@@ -426,16 +391,8 @@ export default function SkusPage() {
 													{s.skuId}
 												</a>
 											</TableCell>
-											<TableCell className="text-sm">
-												<div className="flex flex-col gap-0.5">
-													<span className="font-medium text-foreground">{s.name}</span>
-													<span className="line-clamp-1 text-xs text-muted-foreground">
-														{s.description}
-													</span>
-												</div>
-											</TableCell>
-											<TableCell>
-												<BrandChip tenantId={s.tenantId} />
+											<TableCell className="text-sm font-medium text-foreground">
+												{s.name}
 											</TableCell>
 											<TableCell className="text-sm capitalize">
 												{BILLING_CYCLES.find((c) => c.value === s.billingCycle)?.label.toLowerCase()}
@@ -492,7 +449,7 @@ export default function SkusPage() {
 								})}
 								{skus.length === 0 ? (
 									<TableRow>
-										<TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+										<TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
 											No SKUs match your search.
 										</TableCell>
 									</TableRow>

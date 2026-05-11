@@ -20,6 +20,7 @@ import {
 	Wrench,
 } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
+import { useTenant } from '@/components/tenant-context';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -241,7 +242,7 @@ function TenantMark({ tenant, className }: { tenant: Tenant; className?: string 
 function FooterTenantSwitcher() {
 	const { state, isMobile } = useSidebar();
 	const collapsed = state === 'collapsed' && !isMobile;
-	const [activeId, setActiveId] = React.useState<string>('playkids');
+	const { activeId, setActiveId } = useTenant();
 	const [switchingTo, setSwitchingTo] = React.useState<Tenant | null>(null);
 	const switchTimerRef = React.useRef<number | null>(null);
 	const active = tenants.find((t) => t.id === activeId) ?? tenants[0];

@@ -2,13 +2,13 @@
 
 import {
 	BoxesIcon,
-	CalendarClockIcon,
 	CoinsIcon,
 	GiftIcon,
 	PlusIcon,
 	Trash2Icon,
 } from 'lucide-react';
 import * as React from 'react';
+import { StatusSwitch } from '@/components/status-switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,31 +20,30 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import {
 	BILLING_CYCLES,
 	CURRENCIES,
-	TENANT_BRANDS,
 	currencySymbol,
 	type BillingCycle,
 	type Currency,
 	type Price,
 	type Sku,
-	type TrialType,
 } from '@/lib/skus';
 
+// Trial types supported by the editor today. Existing intro-pricing SKUs are
+// still readable in detail view; editing one will coerce it to a free trial.
+export type FormTrialType = 'none' | 'free_trial';
+
+// Brand/tenant scoping is owned by the page (via `useTenant`), not the form.
 export type SkuFormValue = {
 	skuId: string;
 	name: string;
 	description: string;
-	tenantId: string;
 	billingCycle: BillingCycle;
 	status: 'active' | 'inactive';
-	trialType: TrialType;
+	trialType: FormTrialType;
 	freeTrialDays: number;
-	introDurationDays: number;
 	prices: Price[];
-	introPrices: Price[];
 };
 
 export function skuToForm(s: Sku): SkuFormValue {
@@ -52,17 +51,12 @@ export function skuToForm(s: Sku): SkuFormValue {
 		skuId: s.skuId,
 		name: s.name,
 		description: s.description,
-		tenantId: s.tenantId,
 		billingCycle: s.billingCycle,
 		status: s.status,
-		trialType: s.trial.type,
+		// Existing introductory_pricing → free_trial on edit (one-way coerce).
+		trialType: s.trial.type === 'free_trial' ? 'free_trial' : 'none',
 		freeTrialDays: s.trial.freeTrialDays ?? 7,
-		introDurationDays: s.trial.introDurationDays ?? 30,
 		prices: s.prices.length > 0 ? s.prices : [{ currency: 'USD', amount: 0 }],
-		introPrices:
-			s.trial.introPrices && s.trial.introPrices.length > 0
-				? s.trial.introPrices
-				: [{ currency: 'USD', amount: 0 }],
 	};
 }
 
@@ -70,14 +64,11 @@ export const EMPTY_SKU_FORM: SkuFormValue = {
 	skuId: '',
 	name: '',
 	description: '',
-	tenantId: 'playkids',
 	billingCycle: 'monthly',
 	status: 'active',
 	trialType: 'none',
 	freeTrialDays: 7,
-	introDurationDays: 30,
 	prices: [{ currency: 'USD', amount: 0 }],
-	introPrices: [{ currency: 'USD', amount: 0 }],
 };
 
 type Props = {
@@ -90,19 +81,28 @@ export function SkuFormSections({ value, onChange }: Props) {
 		onChange((p) => ({ ...p, [key]: v }));
 	}
 
+	// Layout:
+	// ┌───────────────────┬────────────────┐
+	// │                   │  Trial         │
+	// │  Plan Details     ├────────────────┤
+	// │                   │  Pricing       │
+	// └───────────────────┴────────────────┘
+	//
+	// `items-start` on the grid + a separate flex column on the right
+	// guarantee each card sizes to its own content. Plan Details stays
+	// its natural height; Trial and Pricing never stretch into one another.
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<DetailsCard value={value} set={set} />
-				<LifecycleCard value={value} set={set} />
+		<div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
+			<DetailsCard value={value} set={set} />
+			<div className="flex flex-col gap-4">
+				<TrialCard value={value} set={set} />
+				<PricingCard value={value} set={set} />
 			</div>
-			<PricingCard value={value} set={set} />
-			<TrialCard value={value} set={set} />
 		</div>
 	);
 }
 
-// ─── Details (name, SKU id, description, brand, cycle) ───────────────
+// ─── Details (now includes Status switch at the bottom) ──────────────
 
 function DetailsCard({
 	value,
@@ -111,6 +111,7 @@ function DetailsCard({
 	value: SkuFormValue;
 	set: <K extends keyof SkuFormValue>(k: K, v: SkuFormValue[K]) => void;
 }) {
+	const active = value.status === 'active';
 	return (
 		<Card className="h-full">
 			<CardHeader className="flex flex-row items-center gap-2">
@@ -147,34 +148,12 @@ function DetailsCard({
 						className="flex min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 					/>
 				</FormRow>
-				<FormRow label="Brand" required helper="The tenant this SKU belongs to.">
-					<Select value={value.tenantId} onValueChange={(v) => set('tenantId', v)}>
-						<SelectTrigger>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{TENANT_BRANDS.map((b) => (
-								<SelectItem key={b.id} value={b.id}>
-									<span className="inline-flex items-center gap-2">
-										<span
-											className="flex size-4 items-center justify-center rounded text-[9px] font-semibold text-white"
-											style={{ backgroundColor: b.color }}
-										>
-											{b.name[0]}
-										</span>
-										{b.name}
-									</span>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</FormRow>
 				<FormRow label="Billing Cycle" required>
 					<Select
 						value={value.billingCycle}
 						onValueChange={(v) => set('billingCycle', v as BillingCycle)}
 					>
-						<SelectTrigger>
+						<SelectTrigger className="!h-9 w-full">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -186,64 +165,128 @@ function DetailsCard({
 						</SelectContent>
 					</Select>
 				</FormRow>
+				<FormRow
+					label="Status"
+					required
+					helper="Inactive SKUs are hidden from new purchases. Status changes are tracked in Version History."
+				>
+					<StatusSwitch
+						active={active}
+						onChange={(v) => set('status', v ? 'active' : 'inactive')}
+					/>
+				</FormRow>
 			</CardContent>
 		</Card>
 	);
 }
 
-// ─── Lifecycle (status switch) ───────────────────────────────────────
+// ─── Trial (None / Free Trial only) ──────────────────────────────────
 
-function LifecycleCard({
+function TrialCard({
 	value,
 	set,
 }: {
 	value: SkuFormValue;
 	set: <K extends keyof SkuFormValue>(k: K, v: SkuFormValue[K]) => void;
 }) {
+	const isFree = value.trialType === 'free_trial';
+
 	return (
-		<Card className="h-full">
-			<CardHeader className="flex flex-row items-center justify-between gap-2">
-				<div className="flex items-center gap-2">
-					<CardIcon icon={CalendarClockIcon} />
-					<CardTitle>Plan Lifecycle</CardTitle>
-				</div>
-				<div className="flex items-center gap-2">
-					<Switch
-						checked={value.status === 'active'}
-						onCheckedChange={(v) => set('status', v ? 'active' : 'inactive')}
-					/>
-					<span className="text-sm text-muted-foreground">
-						{value.status === 'active' ? 'Active' : 'Inactive'}
-					</span>
-				</div>
+		<Card>
+			<CardHeader className="flex flex-row items-center gap-2">
+				<CardIcon icon={GiftIcon} />
+				<CardTitle>Trial</CardTitle>
 			</CardHeader>
 			<Divider />
-			<CardContent className="flex flex-col gap-3">
-				<p className="text-sm text-muted-foreground">
-					When a SKU is <span className="font-medium text-foreground">Inactive</span>, new users
-					can no longer purchase it. Existing subscribers stay on their current plan until they
-					renew or cancel.
-				</p>
-				<div className="rounded-lg border border-[#FFC101]/30 bg-[#FFC101]/5 p-3">
-					<div className="flex items-start gap-2">
-						<Badge
-							variant="outline"
-							className="mt-0.5 shrink-0 border-[#FFC101]/40 bg-[#FFC101]/10 text-[10px] text-[#A07700]"
-						>
-							Audit
-						</Badge>
-						<p className="text-xs text-muted-foreground">
-							Toggling status creates a new version entry. Pricing changes are always tracked in
-							the version history shown on the SKU detail page.
-						</p>
+			<CardContent className="flex flex-col gap-5">
+				<FormRow label="Trial Type">
+					<div className="grid grid-cols-2 gap-2">
+						<TrialOption
+							active={value.trialType === 'none'}
+							title="None"
+							subtitle="Charge from day one"
+							onClick={() => set('trialType', 'none')}
+						/>
+						<TrialOption
+							active={isFree}
+							title="Free Trial"
+							subtitle="Free for N days"
+							onClick={() => set('trialType', 'free_trial')}
+						/>
 					</div>
-				</div>
+				</FormRow>
+
+				{isFree ? (
+					<FormRow label="Free Trial Duration" required>
+						<div className="flex flex-wrap items-center gap-2">
+							<div className="relative">
+								<Input
+									type="number"
+									min={1}
+									className="h-9 w-28 pr-10 tabular-nums"
+									value={value.freeTrialDays}
+									onChange={(e) => set('freeTrialDays', Math.max(1, Number(e.target.value) || 0))}
+								/>
+								<span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground">
+									days
+								</span>
+							</div>
+							<div className="flex items-center gap-1.5">
+								{[7, 14, 30].map((d) => (
+									<button
+										key={d}
+										type="button"
+										onClick={() => set('freeTrialDays', d)}
+										className={
+											'rounded-full border px-2.5 py-0.5 text-xs font-medium transition ' +
+											(value.freeTrialDays === d
+												? 'border-[#224089] bg-[#224089]/10 text-[#224089]'
+												: 'border-border bg-card text-muted-foreground hover:border-[#224089]/40 hover:text-[#224089]')
+										}
+									>
+										{d}d
+									</button>
+								))}
+							</div>
+						</div>
+					</FormRow>
+				) : null}
 			</CardContent>
 		</Card>
 	);
 }
 
-// ─── Pricing (multi-currency) ────────────────────────────────────────
+function TrialOption({
+	active,
+	title,
+	subtitle,
+	onClick,
+}: {
+	active: boolean;
+	title: string;
+	subtitle: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={
+				'flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition ' +
+				(active
+					? 'border-[#224089] bg-[#224089]/5 ring-1 ring-[#224089]/20'
+					: 'border-border bg-card hover:border-[#224089]/40 hover:bg-[#224089]/5')
+			}
+		>
+			<span className={'text-sm font-medium ' + (active ? 'text-[#224089]' : 'text-foreground')}>
+				{title}
+			</span>
+			<span className="text-xs text-muted-foreground">{subtitle}</span>
+		</button>
+	);
+}
+
+// ─── Pricing ─────────────────────────────────────────────────────────
 
 function PricingCard({
 	value,
@@ -298,10 +341,9 @@ function PricingCard({
 				</Button>
 			</CardHeader>
 			<Divider />
-			<CardContent>
-				<p className="mb-3 text-sm text-muted-foreground">
-					Set the price for each market. Subscribers see the currency configured for their
-					region.
+			<CardContent className="flex flex-col gap-5">
+				<p className="text-xs text-muted-foreground">
+					Set the price for each market. Subscribers see the currency for their region.
 				</p>
 				<div className="flex flex-col gap-2">
 					{value.prices.map((p, i) => (
@@ -310,9 +352,11 @@ function PricingCard({
 							price={p}
 							onChange={(patch) => updatePrice(i, patch)}
 							onRemove={value.prices.length > 1 ? () => removePrice(i) : undefined}
-							disabledCurrencies={new Set(
-								value.prices.filter((_, idx) => idx !== i).map((pp) => pp.currency),
-							)}
+							disabledCurrencies={
+								new Set(
+									value.prices.filter((_, idx) => idx !== i).map((pp) => pp.currency),
+								)
+							}
 						/>
 					))}
 				</div>
@@ -333,18 +377,15 @@ function PriceRow({
 	disabledCurrencies: Set<Currency>;
 }) {
 	return (
-		<div className="flex items-center gap-2 rounded-lg border bg-[#FAFAFA] p-2.5">
-			<Select
-				value={price.currency}
-				onValueChange={(v) => onChange({ currency: v as Currency })}
-			>
-				<SelectTrigger size="sm" className="h-9 w-[150px] bg-card">
+		<div className="flex items-center gap-2">
+			<Select value={price.currency} onValueChange={(v) => onChange({ currency: v as Currency })}>
+				<SelectTrigger className="!h-9 w-[120px] shrink-0">
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
 					{CURRENCIES.map((c) => (
 						<SelectItem key={c.value} value={c.value} disabled={disabledCurrencies.has(c.value)}>
-							{c.symbol} {c.value} — {c.label}
+							{c.symbol} {c.value}
 						</SelectItem>
 					))}
 				</SelectContent>
@@ -361,7 +402,7 @@ function PriceRow({
 					onChange={(e) =>
 						onChange({ amount: e.target.value === '' ? 0 : Number(e.target.value) })
 					}
-					className="h-9 bg-card pl-8 font-mono tabular-nums"
+					className="h-9 pl-7 font-mono tabular-nums"
 				/>
 			</div>
 			{onRemove ? (
@@ -370,7 +411,7 @@ function PriceRow({
 					variant="ghost"
 					size="icon-sm"
 					aria-label="Remove price"
-					className="size-9 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+					className="size-9 shrink-0 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
 					onClick={onRemove}
 				>
 					<Trash2Icon />
@@ -379,186 +420,6 @@ function PriceRow({
 				<span className="size-9 shrink-0" aria-hidden />
 			)}
 		</div>
-	);
-}
-
-// ─── Trial / Intro pricing ───────────────────────────────────────────
-
-function TrialCard({
-	value,
-	set,
-}: {
-	value: SkuFormValue;
-	set: <K extends keyof SkuFormValue>(k: K, v: SkuFormValue[K]) => void;
-}) {
-	const isFree = value.trialType === 'free_trial';
-	const isIntro = value.trialType === 'introductory_pricing';
-
-	const used = new Set(value.introPrices.map((p) => p.currency));
-	const available = CURRENCIES.filter((c) => !used.has(c.value));
-
-	function updateIntro(i: number, patch: Partial<Price>) {
-		set(
-			'introPrices',
-			value.introPrices.map((p, idx) => (idx === i ? { ...p, ...patch } : p)),
-		);
-	}
-	function addIntro() {
-		if (available.length === 0) return;
-		set('introPrices', [...value.introPrices, { currency: available[0].value, amount: 0 }]);
-	}
-	function removeIntro(i: number) {
-		if (value.introPrices.length <= 1) return;
-		set(
-			'introPrices',
-			value.introPrices.filter((_, idx) => idx !== i),
-		);
-	}
-
-	return (
-		<Card>
-			<CardHeader className="flex flex-row items-center gap-2">
-				<CardIcon icon={GiftIcon} />
-				<CardTitle>Trial &amp; Introductory Pricing</CardTitle>
-			</CardHeader>
-			<Divider />
-			<CardContent className="flex flex-col gap-5">
-				<FormRow label="Trial Type">
-					<div className="grid grid-cols-3 gap-2">
-						<TrialOption
-							active={value.trialType === 'none'}
-							title="None"
-							subtitle="Charge from day one"
-							onClick={() => set('trialType', 'none')}
-						/>
-						<TrialOption
-							active={isFree}
-							title="Free Trial"
-							subtitle="Free for N days"
-							onClick={() => set('trialType', 'free_trial')}
-						/>
-						<TrialOption
-							active={isIntro}
-							title="Introductory"
-							subtitle="Reduced price window"
-							onClick={() => set('trialType', 'introductory_pricing')}
-						/>
-					</div>
-				</FormRow>
-
-				{isFree ? (
-					<FormRow label="Free Trial Duration" required>
-						<div className="flex items-center gap-2">
-							<Input
-								type="number"
-								min={1}
-								className="h-9 w-32 tabular-nums"
-								value={value.freeTrialDays}
-								onChange={(e) => set('freeTrialDays', Math.max(1, Number(e.target.value) || 0))}
-							/>
-							<span className="text-sm text-muted-foreground">days</span>
-							<div className="ml-2 flex items-center gap-1.5">
-								{[7, 14, 30].map((d) => (
-									<button
-										key={d}
-										type="button"
-										onClick={() => set('freeTrialDays', d)}
-										className={
-											'rounded-full border px-2.5 py-0.5 text-xs font-medium transition ' +
-											(value.freeTrialDays === d
-												? 'border-[#224089] bg-[#224089]/10 text-[#224089]'
-												: 'border-border bg-card text-muted-foreground hover:border-[#224089]/40 hover:text-[#224089]')
-										}
-									>
-										{d}d
-									</button>
-								))}
-							</div>
-						</div>
-					</FormRow>
-				) : null}
-
-				{isIntro ? (
-					<>
-						<FormRow label="Introductory Period" required>
-							<div className="flex items-center gap-2">
-								<Input
-									type="number"
-									min={1}
-									className="h-9 w-32 tabular-nums"
-									value={value.introDurationDays}
-									onChange={(e) =>
-										set('introDurationDays', Math.max(1, Number(e.target.value) || 0))
-									}
-								/>
-								<span className="text-sm text-muted-foreground">days</span>
-							</div>
-						</FormRow>
-						<FormRow
-							label="Introductory Prices"
-							helper="Subscribers pay this for the intro period, then roll into standard pricing above."
-						>
-							<div className="flex flex-col gap-2">
-								{value.introPrices.map((p, i) => (
-									<PriceRow
-										key={p.currency + '-' + i}
-										price={p}
-										onChange={(patch) => updateIntro(i, patch)}
-										onRemove={value.introPrices.length > 1 ? () => removeIntro(i) : undefined}
-										disabledCurrencies={
-											new Set(
-												value.introPrices.filter((_, idx) => idx !== i).map((pp) => pp.currency),
-											)
-										}
-									/>
-								))}
-								<Button
-									type="button"
-									size="sm"
-									variant="outline"
-									className="mt-1 h-8 self-start"
-									disabled={available.length === 0}
-									onClick={addIntro}
-								>
-									<PlusIcon />
-									Add currency
-								</Button>
-							</div>
-						</FormRow>
-					</>
-				) : null}
-			</CardContent>
-		</Card>
-	);
-}
-
-function TrialOption({
-	active,
-	title,
-	subtitle,
-	onClick,
-}: {
-	active: boolean;
-	title: string;
-	subtitle: string;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={
-				'flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition ' +
-				(active
-					? 'border-[#224089] bg-[#224089]/5 ring-1 ring-[#224089]/20'
-					: 'border-border bg-card hover:border-[#224089]/40 hover:bg-[#224089]/5')
-			}
-		>
-			<span className={'text-sm font-medium ' + (active ? 'text-[#224089]' : 'text-foreground')}>
-				{title}
-			</span>
-			<span className="text-xs text-muted-foreground">{subtitle}</span>
-		</button>
 	);
 }
 

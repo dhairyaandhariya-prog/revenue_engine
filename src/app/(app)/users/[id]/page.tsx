@@ -27,6 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusSwitch } from '@/components/status-switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -692,14 +693,11 @@ function DetailsCard({
 								onChange={(e) => setUser((p) => ({ ...p, lastName: e.target.value || null }))}
 							/>
 						</FormRow>
-						<FormRow label="Is Active">
-							<label className="flex items-center gap-2 text-sm">
-								<Checkbox
-									checked={user.isActive}
-									onCheckedChange={(v) => setUser((p) => ({ ...p, isActive: v === true }))}
-								/>
-								<span>{user.isActive ? 'Active' : 'Inactive'}</span>
-							</label>
+						<FormRow label="Status" required>
+							<StatusSwitch
+								active={user.isActive}
+								onChange={(v) => setUser((p) => ({ ...p, isActive: v }))}
+							/>
 						</FormRow>
 					</>
 				) : (

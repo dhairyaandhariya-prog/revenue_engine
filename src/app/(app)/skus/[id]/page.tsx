@@ -2,7 +2,6 @@
 
 import {
 	BoxesIcon,
-	CalendarClockIcon,
 	CheckIcon,
 	CoinsIcon,
 	GiftIcon,
@@ -18,6 +17,7 @@ import {
 	skuToForm,
 	type SkuFormValue,
 } from '@/components/sku-form-sections';
+import { StatusLabel } from '@/components/status-switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +26,6 @@ import { cn } from '@/lib/utils';
 import {
 	billingLabel,
 	formatPrice,
-	getBrand,
 	getSku,
 	trialSummary,
 	type Price,
@@ -46,12 +45,6 @@ function formatTimestamp(s: string) {
 		hour: 'numeric',
 		minute: '2-digit',
 	});
-}
-
-function formatDate(s: string) {
-	const d = new Date(s);
-	if (Number.isNaN(d.getTime())) return s;
-	return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function SkuDetailPage({ params }: { params: Params }) {
@@ -77,20 +70,13 @@ export default function SkuDetailPage({ params }: { params: Params }) {
 			skuId: form.skuId,
 			name: form.name,
 			description: form.description,
-			tenantId: form.tenantId,
 			billingCycle: form.billingCycle,
 			status: form.status,
 			prices: form.prices,
 			trial:
 				form.trialType === 'free_trial'
 					? { type: 'free_trial', freeTrialDays: form.freeTrialDays }
-					: form.trialType === 'introductory_pricing'
-						? {
-								type: 'introductory_pricing',
-								introPrices: form.introPrices,
-								introDurationDays: form.introDurationDays,
-							}
-						: { type: 'none' },
+					: { type: 'none' },
 			updatedAt: new Date().toISOString(),
 		}));
 		setSnapshot(null);
@@ -101,8 +87,6 @@ export default function SkuDetailPage({ params }: { params: Params }) {
 		setSnapshot(null);
 		setEditing(false);
 	}
-
-	const brand = getBrand(sku.tenantId);
 
 	return (
 		<>
@@ -134,17 +118,6 @@ export default function SkuDetailPage({ params }: { params: Params }) {
 								/>
 								{sku.status === 'active' ? 'Active' : 'Inactive'}
 							</Badge>
-							{brand ? (
-								<span className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-0.5 text-xs">
-									<span
-										className="flex size-3.5 items-center justify-center rounded text-[9px] font-semibold text-white"
-										style={{ backgroundColor: brand.color }}
-									>
-										{brand.name[0]}
-									</span>
-									<span className="font-medium text-foreground">{brand.name}</span>
-								</span>
-							) : null}
 						</div>
 						<p className="text-sm text-muted-foreground">
 							<span className="font-mono text-foreground">{sku.skuId}</span>
@@ -186,12 +159,16 @@ export default function SkuDetailPage({ params }: { params: Params }) {
 					<SkuFormSections value={form} onChange={setForm} />
 				) : (
 					<div className="flex flex-col gap-4">
-						<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						{/* Mirror the create layout. `items-start` on the grid +
+						    the inner flex column on the right keep each card's
+						    height tied to its own content only. */}
+						<div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
 							<DetailsReadCard sku={sku} />
-							<LifecycleReadCard sku={sku} />
+							<div className="flex flex-col gap-4">
+								<TrialReadCard sku={sku} />
+								<PricingReadCard sku={sku} />
+							</div>
 						</div>
-						<PricingReadCard sku={sku} />
-						<TrialReadCard sku={sku} />
 						<HistoryCard versions={sku.versions} />
 					</div>
 				)}
@@ -222,7 +199,7 @@ function ReadField({ label, children }: { label: string; children: React.ReactNo
 }
 
 function DetailsReadCard({ sku }: { sku: Sku }) {
-	const brand = getBrand(sku.tenantId);
+	const active = sku.status === 'active';
 	return (
 		<Card className="h-full">
 			<CardHeader className="flex flex-row items-center gap-2">
@@ -242,57 +219,9 @@ function DetailsReadCard({ sku }: { sku: Sku }) {
 						)}
 					</span>
 				</ReadField>
-				<ReadField label="Brand">
-					{brand ? (
-						<span className="inline-flex items-center gap-1.5">
-							<span
-								className="flex size-5 items-center justify-center rounded text-[10px] font-semibold text-white"
-								style={{ backgroundColor: brand.color }}
-							>
-								{brand.name[0]}
-							</span>
-							{brand.name}
-						</span>
-					) : (
-						sku.tenantId
-					)}
-				</ReadField>
 				<ReadField label="Billing Cycle">{billingLabel(sku.billingCycle)}</ReadField>
-			</CardContent>
-		</Card>
-	);
-}
-
-function LifecycleReadCard({ sku }: { sku: Sku }) {
-	return (
-		<Card className="h-full">
-			<CardHeader className="flex flex-row items-center gap-2">
-				<CardIcon icon={CalendarClockIcon} />
-				<CardTitle>Plan Lifecycle</CardTitle>
-			</CardHeader>
-			<Divider />
-			<CardContent className="flex flex-col gap-5">
 				<ReadField label="Status">
-					<Badge
-						variant="outline"
-						className={cn(
-							'gap-1.5',
-							sku.status === 'active'
-								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
-								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
-						)}
-					>
-						<span
-							className="size-1.5 rounded-full"
-							style={{ backgroundColor: sku.status === 'active' ? '#00B86E' : '#E8536A' }}
-						/>
-						{sku.status === 'active' ? 'Active' : 'Inactive'}
-					</Badge>
-				</ReadField>
-				<ReadField label="Created">{formatTimestamp(sku.createdAt)}</ReadField>
-				<ReadField label="Last Modified">{formatTimestamp(sku.updatedAt)}</ReadField>
-				<ReadField label="Version Count">
-					{sku.versions.length} {sku.versions.length === 1 ? 'version' : 'versions'} tracked
+					<StatusLabel active={active} />
 				</ReadField>
 			</CardContent>
 		</Card>
@@ -311,9 +240,9 @@ function PricingReadCard({ sku }: { sku: Sku }) {
 			</CardHeader>
 			<Divider />
 			<CardContent>
-				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+				<div className="grid grid-cols-2 gap-2">
 					{sku.prices.map((p) => (
-						<PriceTile key={p.currency} price={p} cycle={sku.billingCycle} />
+						<PriceTile key={p.currency} price={p} />
 					))}
 				</div>
 			</CardContent>
@@ -321,61 +250,46 @@ function PricingReadCard({ sku }: { sku: Sku }) {
 	);
 }
 
-function PriceTile({ price, cycle }: { price: Price; cycle: Sku['billingCycle'] }) {
+// Compact, horizontal tile. Billing cycle isn't repeated here — it's right
+// above in Plan Details, so showing it on every tile is redundant noise.
+function PriceTile({ price }: { price: Price }) {
 	return (
-		<div className="flex flex-col gap-1 rounded-lg border bg-[#FAFAFA] p-3">
+		<div className="flex items-baseline justify-between gap-2 rounded-lg border bg-[#FAFAFA] px-3 py-2">
 			<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				{price.currency}
 			</span>
-			<span className="text-lg font-semibold tabular-nums text-foreground">
+			<span className="text-sm font-semibold tabular-nums text-foreground">
 				{formatPrice(price)}
 			</span>
-			<span className="text-xs text-muted-foreground">{billingLabel(cycle)}</span>
 		</div>
 	);
 }
 
 function TrialReadCard({ sku }: { sku: Sku }) {
 	const t = sku.trial;
+	const isFree = t.type === 'free_trial';
 	return (
 		<Card>
 			<CardHeader className="flex flex-row items-center gap-2">
 				<CardIcon icon={GiftIcon} />
-				<CardTitle>Trial &amp; Introductory Pricing</CardTitle>
+				<CardTitle>Trial</CardTitle>
 			</CardHeader>
 			<Divider />
 			<CardContent className="flex flex-col gap-5">
 				<ReadField label="Trial Type">
-					{t.type === 'none'
-						? 'None — charge from day one'
-						: t.type === 'free_trial'
-							? 'Free Trial'
-							: 'Introductory Pricing'}
+					{isFree ? 'Free Trial' : 'None — charge from day one'}
 				</ReadField>
-				{t.type === 'free_trial' ? (
+				{isFree ? (
 					<ReadField label="Free Trial Duration">{t.freeTrialDays} days</ReadField>
-				) : null}
-				{t.type === 'introductory_pricing' ? (
-					<>
-						<ReadField label="Introductory Period">{t.introDurationDays} days</ReadField>
-						<div className="flex flex-col gap-2">
-							<span className="text-xs font-medium text-muted-foreground">Introductory Prices</span>
-							<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-								{(t.introPrices ?? []).map((p) => (
-									<PriceTile key={p.currency} price={p} cycle={sku.billingCycle} />
-								))}
-							</div>
-						</div>
-					</>
-				) : null}
-				{t.type === 'none' ? (
+				) : (
 					<p className="text-sm text-muted-foreground">{trialSummary(t)}.</p>
-				) : null}
+				)}
 			</CardContent>
 		</Card>
 	);
 }
 
+// Matches the Subscription Period table styling from User Detail.
 function HistoryCard({ versions }: { versions: PriceVersion[] }) {
 	const ordered = [...versions].sort((a, b) =>
 		a.effectiveFrom < b.effectiveFrom ? 1 : -1,
@@ -390,64 +304,77 @@ function HistoryCard({ versions }: { versions: PriceVersion[] }) {
 				</Badge>
 			</CardHeader>
 			<Divider />
-			<CardContent className="p-0">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead className="w-[160px]">Effective From</TableHead>
-							<TableHead>Prices</TableHead>
-							<TableHead className="w-[160px]">Changed By</TableHead>
-							<TableHead>Note</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{ordered.map((v, i) => (
-							<TableRow key={v.id}>
-								<TableCell className="align-top text-sm">
-									<div className="flex flex-col gap-0.5">
-										<span className="font-medium text-foreground">{formatDate(v.effectiveFrom)}</span>
-										{i === 0 ? (
-											<Badge
-												variant="outline"
-												className="w-fit border-[#224089]/30 bg-[#224089]/10 text-[10px] text-[#224089]"
-											>
-												Current
-											</Badge>
-										) : null}
-									</div>
-								</TableCell>
-								<TableCell>
-									<div className="flex flex-wrap gap-1.5">
-										{v.prices.map((p) => (
-											<span
-												key={p.currency}
-												className="inline-flex items-center gap-1 rounded-md border bg-[#FAFAFA] px-1.5 py-0.5 text-xs"
-											>
-												<span className="font-medium uppercase text-muted-foreground">
-													{p.currency}
-												</span>
-												<span className="font-mono font-medium tabular-nums text-foreground">
-													{formatPrice(p)}
-												</span>
-											</span>
-										))}
-									</div>
-								</TableCell>
-								<TableCell className="align-top text-sm">{v.changedBy}</TableCell>
-								<TableCell className="align-top text-sm text-muted-foreground">
-									{v.note ?? <span className="text-muted-foreground/60">—</span>}
-								</TableCell>
-							</TableRow>
-						))}
-						{versions.length === 0 ? (
+			<CardContent>
+				<div className="overflow-hidden rounded-lg border bg-card">
+					<Table>
+						<TableHeader className="[&_th]:border-b [&_th]:bg-muted [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
 							<TableRow>
-								<TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-									No version history yet.
-								</TableCell>
+								<TableHead className="w-[180px]">Effective From</TableHead>
+								<TableHead>Prices</TableHead>
+								<TableHead className="w-[180px]">Changed By</TableHead>
+								<TableHead>Note</TableHead>
+								<TableHead className="w-[100px] text-right">Status</TableHead>
 							</TableRow>
-						) : null}
-					</TableBody>
-				</Table>
+						</TableHeader>
+						<TableBody className="[&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_tr]:bg-card">
+							{versions.length === 0 ? (
+								<TableRow>
+									<TableCell
+										colSpan={5}
+										className="py-6 text-center text-sm italic text-muted-foreground"
+									>
+										No version history yet.
+									</TableCell>
+								</TableRow>
+							) : (
+								ordered.map((v, i) => (
+									<TableRow key={v.id}>
+										<TableCell className="align-top text-sm text-foreground">
+											<span className="font-semibold text-[#224089]">
+												{formatTimestamp(v.effectiveFrom)}
+											</span>
+										</TableCell>
+										<TableCell className="align-top">
+											<div className="flex flex-wrap gap-1.5">
+												{v.prices.map((p) => (
+													<span
+														key={p.currency}
+														className="inline-flex items-center gap-1 rounded-md border bg-[#FAFAFA] px-1.5 py-0.5 text-xs"
+													>
+														<span className="font-medium uppercase text-muted-foreground">
+															{p.currency}
+														</span>
+														<span className="font-mono font-medium tabular-nums text-foreground">
+															{formatPrice(p)}
+														</span>
+													</span>
+												))}
+											</div>
+										</TableCell>
+										<TableCell className="align-top text-sm text-foreground">
+											{v.changedBy}
+										</TableCell>
+										<TableCell className="align-top text-sm text-muted-foreground">
+											{v.note ?? <span className="text-muted-foreground/60">—</span>}
+										</TableCell>
+										<TableCell className="align-top text-right">
+											{i === 0 ? (
+												<Badge
+													variant="outline"
+													className="border-[#224089]/30 bg-[#224089]/10 text-[10px] text-[#224089]"
+												>
+													Current
+												</Badge>
+											) : (
+												<span className="text-muted-foreground/60">—</span>
+											)}
+										</TableCell>
+									</TableRow>
+								))
+							)}
+						</TableBody>
+					</Table>
+				</div>
 			</CardContent>
 		</Card>
 	);

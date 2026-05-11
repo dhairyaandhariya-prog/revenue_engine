@@ -190,21 +190,12 @@ const SKUS: Sku[] = [
 	},
 	{
 		id: 'sku-003',
-		skuId: 'pk_intro_monthly_01',
-		name: 'PlayKids Intro — Monthly',
-		description: 'Reduced first 3 months, then rolls into standard monthly.',
+		skuId: 'pk_promo_monthly_01',
+		name: 'PlayKids Promo — Monthly',
+		description: 'Acquisition-focused monthly plan with an extended 30-day free trial.',
 		tenantId: 'playkids',
 		billingCycle: 'monthly',
-		trial: {
-			type: 'introductory_pricing',
-			introPrices: [
-				{ currency: 'USD', amount: 2.99 },
-				{ currency: 'BRL', amount: 12.9 },
-				{ currency: 'EUR', amount: 2.49 },
-				{ currency: 'GBP', amount: 1.99 },
-			],
-			introDurationDays: 90,
-		},
+		trial: { type: 'free_trial', freeTrialDays: 30 },
 		prices: [
 			{ currency: 'USD', amount: 9.99 },
 			{ currency: 'BRL', amount: 39.9 },

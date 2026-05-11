@@ -12,6 +12,7 @@ import {
 import { notFound, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { PageHeader } from '@/components/page-header';
+import { StatusLabel } from '@/components/status-switch';
 import {
 	TenantFormSections,
 	type TenantFormValue,
@@ -205,21 +206,7 @@ function DetailsReadCard({ tenant }: { tenant: TenantDetail }) {
 					<span className="font-mono">{tenant.key}</span>
 				</ReadField>
 				<ReadField label="Status">
-					<Badge
-						variant="outline"
-						className={cn(
-							'gap-1.5',
-							tenant.isActive
-								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
-								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
-						)}
-					>
-						<span
-							className="size-1.5 rounded-full"
-							style={{ backgroundColor: tenant.isActive ? '#00B86E' : '#E8536A' }}
-						/>
-						{tenant.isActive ? 'Active' : 'Inactive'}
-					</Badge>
+					<StatusLabel active={tenant.isActive} />
 				</ReadField>
 			</CardContent>
 		</Card>

@@ -14,12 +14,12 @@ import {
 	UsersRoundIcon,
 } from 'lucide-react';
 import * as React from 'react';
+import { StatusSwitch } from '@/components/status-switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import {
@@ -243,15 +243,10 @@ function DetailsCard({ value, onChange }: Props) {
 					/>
 				</FormRow>
 				<FormRow label="Status" required>
-					<div className="flex items-center gap-3">
-						<Switch
-							checked={value.isActive}
-							onCheckedChange={(v) => onChange((p) => ({ ...p, isActive: v }))}
-						/>
-						<span className="text-sm text-muted-foreground">
-							{value.isActive ? 'Active' : 'Inactive'}
-						</span>
-					</div>
+					<StatusSwitch
+						active={value.isActive}
+						onChange={(v) => onChange((p) => ({ ...p, isActive: v }))}
+					/>
 				</FormRow>
 			</CardContent>
 		</Card>
