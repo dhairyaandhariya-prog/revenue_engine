@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import {
+	Boxes,
 	Building2,
 	ChevronDown,
 	ChevronsUpDown,
@@ -121,6 +122,17 @@ const navGroups: NavGroup[] = [
 			{ title: 'Stripe' },
 			{ title: 'Minu' },
 			{ title: 'Coupon Codes' },
+		],
+	},
+	{
+		label: 'SKU Catalog',
+		icon: Boxes,
+		items: [
+			{ title: 'All SKUs', href: '/skus' },
+			{ title: 'Plans' },
+			{ title: 'Trial Configurations' },
+			{ title: 'Pricing History' },
+			{ title: 'Coupon Eligibility' },
 		],
 	},
 	{

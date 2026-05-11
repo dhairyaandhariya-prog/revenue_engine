@@ -303,6 +303,7 @@ const IDENTITY_OVERRIDES: Record<string, IdentityDocument[]> = {
 };
 
 // Old-design comparison users at the bottom of the list.
+// 932310 (tabs-old) → fully filled state demo
 // 932311 (tabs-old) → empty state demo
 // 932312 (bento-old) → fully filled state demo
 function emptyUser(id: string): UserDetail {
@@ -345,30 +346,12 @@ function filledUser(id: string): UserDetail {
 			lgUserId: 'LG-21073',
 		},
 		profiles: [
-			{
-				id: 'p1',
-				name: 'Testinho Jr',
-				character: 'Junior',
-				birthdate: '2020-12-31',
-				createdAt: '2021-01-15',
-				updatedAt: '2024-08-02',
-			},
-			{
-				id: 'p2',
-				name: 'Testinho Mid',
-				character: 'Mimi',
-				birthdate: '2015-12-31',
-				createdAt: '2016-02-04',
-				updatedAt: null,
-			},
-			{
-				id: 'p3',
-				name: 'Testinho Sr',
-				character: 'Kate',
-				birthdate: '2010-06-12',
-				createdAt: '2010-07-01',
-				updatedAt: '2024-08-02',
-			},
+			{ id: 'p1', name: 'Testinho Jr', character: 'Junior', birthdate: '2020-12-31', createdAt: '2021-01-15', updatedAt: '2024-08-02' },
+			{ id: 'p2', name: 'Testinho Mid', character: 'Mimi', birthdate: '2015-12-31', createdAt: '2016-02-04', updatedAt: null },
+			{ id: 'p3', name: 'Testinho Sr', character: 'Kate', birthdate: '2010-06-12', createdAt: '2010-07-01', updatedAt: '2024-08-02' },
+			{ id: 'p4', name: 'Lupita', character: 'Lupi', birthdate: '2018-04-22', createdAt: '2018-05-01', updatedAt: '2025-01-15' },
+			{ id: 'p5', name: 'Theo Jr', character: 'Theo', birthdate: '2019-09-09', createdAt: '2020-01-10', updatedAt: null },
+			{ id: 'p6', name: 'Mimi Jr', character: 'Mimi', birthdate: '2017-03-14', createdAt: '2017-04-02', updatedAt: '2024-12-01' },
 		],
 		address: {
 			line1: 'Rua Blandina Gomes Junqueira, Loteamento Quinta do Oeste - 123',
@@ -382,6 +365,7 @@ function filledUser(id: string): UserDetail {
 			{ kind: 'cnpj', code: '02263723321096' },
 			{ kind: 'cpf', code: '55398587277' },
 			{ kind: 'ssn', code: '044346954' },
+			{ kind: 'other', code: 'HE2AJVID7' },
 		],
 		credentials: [
 			{ kind: 'email_password', email: 'bruna.dias@playkids.com' },
@@ -418,9 +402,30 @@ function filledUser(id: string): UserDetail {
 	};
 }
 
+// Per-row name overrides so the user list and detail page stay in sync.
+const NAME_OVERRIDES: Record<string, { firstName: string | null; lastName: string | null }> = {
+	'932301': { firstName: 'Aiden', lastName: 'Carter' },
+	'932302': { firstName: 'Sophia', lastName: 'Lee' },
+	'932303': { firstName: 'Marcus', lastName: 'Reed' },
+	'932304': { firstName: 'Priya', lastName: 'Sharma' },
+	'932305': { firstName: 'Liam', lastName: "O'Connor" },
+	'932306': { firstName: 'Yuki', lastName: 'Tanaka' },
+	'932307': { firstName: 'Zara', lastName: 'Ahmed' },
+	'932308': { firstName: 'Diego', lastName: 'Vega' },
+	'932309': { firstName: 'Naomi', lastName: 'Park' },
+	'932310': { firstName: 'Ethan', lastName: 'Mendes' },
+	'932311': { firstName: null, lastName: null },
+	'932312': { firstName: 'Bruna', lastName: 'Dias' },
+};
+
 export function getUserDetail(id: string): UserDetail {
-	if (id === '932311') return emptyUser(id);
-	if (id === '932312') return filledUser(id);
+	const override = NAME_OVERRIDES[id];
+	const applyName = (u: UserDetail): UserDetail =>
+		override ? { ...u, firstName: override.firstName, lastName: override.lastName } : u;
+	if (id === '932301') return applyName(filledUser(id));
+	if (id === '932310') return applyName(filledUser(id));
+	if (id === '932311') return applyName(emptyUser(id));
+	if (id === '932312') return applyName(filledUser(id));
 
 	const s = seed(id);
 	const variant = s % 4;
@@ -435,10 +440,12 @@ export function getUserDetail(id: string): UserDetail {
 		IDENTITY_OVERRIDES[id] ??
 		(hasIdentity ? [{ code: '42243216884', kind: 'cpf' as IdentityKind }] : []);
 
+	const variantFirst = hasName ? 'rodrigo' : null;
+	const variantLast = hasName ? 'p' : null;
 	return {
 		id,
-		firstName: hasName ? 'rodrigo' : null,
-		lastName: hasName ? 'p' : null,
+		firstName: override?.firstName ?? variantFirst,
+		lastName: override?.lastName ?? variantLast,
 		kiwiLegacyAccountUuid: hasKiwi ? '5cb0dc0c-b98b-46c3-aaf5-38a63dfe81e8' : null,
 		isActive: true,
 		createdAt: '2026-03-18T21:05:17.793890+00:00',

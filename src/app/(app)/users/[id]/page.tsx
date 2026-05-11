@@ -7,6 +7,7 @@ import {
 	CheckIcon,
 	CreditCardIcon,
 	IdCardIcon,
+	InfoIcon,
 	KeyRoundIcon,
 	MapPinIcon,
 	PencilIcon,
@@ -19,6 +20,10 @@ import {
 import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { PageHeader } from '@/components/page-header';
+import {
+	UserDetailsFormSection,
+	type NewUserFormValue,
+} from '@/components/user-form-sections';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,11 +56,21 @@ type Params = Promise<{ id: string }>;
 type LayoutMode = 'merged' | 'tabs-old' | 'bento-old' | 'compact';
 
 // Iteration mapping (rows ordered ascending by ID; default sort is ascending).
-// 932303 (row 3): compact field layout (multi-column grids inside Details / Address)
+// 932301–932309 (rows 1-9): merged layout with compact field grids (Details / Address)
+// 932310 (row 10): old 8-tab layout (fully filled demo)
 // 932311 (row 11): old 8-tab layout (empty state demo)
-// 932312 (row 12): old bento mosaic layout (fully filled state demo)
+// 932312 (row 12): old bento mosaic layout (fully filled demo)
 const LAYOUT_OVERRIDES: Record<string, LayoutMode> = {
+	'932301': 'compact',
+	'932302': 'compact',
 	'932303': 'compact',
+	'932304': 'compact',
+	'932305': 'compact',
+	'932306': 'compact',
+	'932307': 'compact',
+	'932308': 'compact',
+	'932309': 'compact',
+	'932310': 'tabs-old',
 	'932311': 'tabs-old',
 	'932312': 'bento-old',
 };
@@ -67,7 +82,11 @@ const TABS = [
 	{ value: 'partner-data', label: 'Partner Data' },
 	{ value: 'subscription', label: 'Subscription' },
 	{ value: 'invoice-reports', label: 'Invoice Reports' },
+	{ value: 'additional-info', label: 'Additional Information' },
 ] as const;
+
+// In edit mode, Invoice Reports is hidden — invoice reports are read-only logs.
+const EDIT_TABS = TABS.filter((t) => t.value !== 'invoice-reports');
 
 const TABS_OLD = [
 	{ value: 'details', label: 'Details' },
@@ -123,6 +142,56 @@ export default function UserDetailPage({ params }: { params: Params }) {
 	const isCompact = layoutMode === 'compact';
 	const isScrollSpy = isMergedLike && editing;
 
+	// Adapter: edit mode reuses the create-flow UserDetailsFormSection, which
+	// expects a NewUserFormValue. Map UserDetail ⇄ NewUserFormValue.
+	const formValue: NewUserFormValue = React.useMemo(
+		() => ({
+			firstName: user.firstName ?? '',
+			lastName: user.lastName ?? '',
+			kiwiLegacyAccountUuid: user.kiwiLegacyAccountUuid ?? '',
+			isActive: user.isActive,
+			identityDocuments: user.identityDocuments,
+			credentials: user.credentials,
+			profiles: user.profiles,
+			address:
+				user.address ?? { line1: '', city: '', cityCode: '', state: '', country: '', zip: '' },
+			partnerData: user.partnerData,
+		}),
+		[user],
+	);
+	const setFormValue: React.Dispatch<React.SetStateAction<NewUserFormValue>> = (updater) => {
+		setUser((prev) => {
+			const prevForm: NewUserFormValue = {
+				firstName: prev.firstName ?? '',
+				lastName: prev.lastName ?? '',
+				kiwiLegacyAccountUuid: prev.kiwiLegacyAccountUuid ?? '',
+				isActive: prev.isActive,
+				identityDocuments: prev.identityDocuments,
+				credentials: prev.credentials,
+				profiles: prev.profiles,
+				address:
+					prev.address ?? { line1: '', city: '', cityCode: '', state: '', country: '', zip: '' },
+				partnerData: prev.partnerData,
+			};
+			const next =
+				typeof updater === 'function'
+					? (updater as (p: NewUserFormValue) => NewUserFormValue)(prevForm)
+					: updater;
+			return {
+				...prev,
+				firstName: next.firstName || null,
+				lastName: next.lastName || null,
+				kiwiLegacyAccountUuid: next.kiwiLegacyAccountUuid || null,
+				isActive: next.isActive,
+				identityDocuments: next.identityDocuments,
+				credentials: next.credentials,
+				profiles: next.profiles,
+				address: next.address,
+				partnerData: next.partnerData,
+			};
+		});
+	};
+
 	const setSectionRef = (key: string) => (el: HTMLElement | null) => {
 		sectionRefs.current[key] = el;
 	};
@@ -145,7 +214,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 		if (!isScrollSpy) return;
 		const root = scrollerRef.current;
 		if (!root) return;
-		const ids = TABS.map((t) => t.value);
+		const ids = EDIT_TABS.map((t) => t.value);
 		function update() {
 			if (isClickScrollingRef.current) return;
 			const rootEl = root!;
@@ -200,7 +269,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 					<div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
 						<Tabs value={activeTab} onValueChange={handleTabChange}>
 							<TabsList variant="line" className="scrollbar-hidden !h-11 -mx-1 gap-2 overflow-x-auto px-1">
-								{TABS.map((t) => (
+								{EDIT_TABS.map((t) => (
 									<TabsTrigger key={t.value} value={t.value} className={cn('px-3 text-sm', tabTriggerClass)}>
 										{t.label}
 									</TabsTrigger>
@@ -215,7 +284,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							className="scroll-mt-24"
 							aria-label="User Details"
 						>
-							<UserDetailsTab user={user} setUser={setUser} editing />
+							<UserDetailsFormSection value={formValue} onChange={setFormValue} />
 						</section>
 						<section
 							id="partner-data"
@@ -234,12 +303,12 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							<SubscriptionsCard user={user} />
 						</section>
 						<section
-							id="invoice-reports"
-							ref={setSectionRef('invoice-reports')}
+							id="additional-info"
+							ref={setSectionRef('additional-info')}
 							className="scroll-mt-24"
-							aria-label="Invoice Reports"
+							aria-label="Additional Information"
 						>
-							<InvoiceReportsCard user={user} />
+							<AdditionalInfoCard user={user} setUser={setUser} editing />
 						</section>
 					</div>
 				</main>
@@ -270,14 +339,17 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							<TabsContent value="user-details">
 								<UserDetailsTab user={user} setUser={setUser} editing={editing} compact={isCompact} />
 							</TabsContent>
-							<TabsContent value="subscription">
-								<SubscriptionsCard user={user} />
-							</TabsContent>
 							<TabsContent value="partner-data">
 								<PartnerDataCard user={user} setUser={setUser} editing={editing} />
 							</TabsContent>
+							<TabsContent value="subscription">
+								<SubscriptionsCard user={user} />
+							</TabsContent>
 							<TabsContent value="invoice-reports">
 								<InvoiceReportsCard user={user} />
+							</TabsContent>
+							<TabsContent value="additional-info">
+								<AdditionalInfoCard user={user} setUser={setUser} editing={editing} />
 							</TabsContent>
 						</Tabs>
 					)}
@@ -368,13 +440,13 @@ function UserDetailsTab({
 	compact = false,
 }: LayoutProps & { compact?: boolean }) {
 	if (editing) {
-		// Edit mode: Details + Identity + Credentials in one row; Profiles + Address full width below.
+		// Edit mode: Details + Identity in 30/70 row; Profiles + Address full width below.
+		// Credentials is hidden — populated by the Herald API, not user-facing.
 		return (
 			<div className="flex flex-col gap-4">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+				<div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[3fr_7fr]">
 					<DetailsCard user={user} setUser={setUser} editing={editing} />
 					<IdentityCard user={user} setUser={setUser} editing={editing} />
-					<CredentialsCard user={user} setUser={setUser} editing={editing} />
 				</div>
 				<ProfilesCard user={user} setUser={setUser} editing={editing} />
 				<AddressCard user={user} setUser={setUser} editing={editing} />
@@ -386,9 +458,8 @@ function UserDetailsTab({
 			<div className="col-span-12 md:col-span-7">
 				<DetailsCard user={user} setUser={setUser} editing={editing} compact={compact} />
 			</div>
-			<div className="col-span-12 flex flex-col gap-4 md:col-span-5">
+			<div className="col-span-12 md:col-span-5">
 				<IdentityCard user={user} setUser={setUser} editing={editing} />
-				<CredentialsCard user={user} setUser={setUser} editing={editing} />
 			</div>
 			<div className="col-span-12 md:col-span-6">
 				<AddressCard user={user} setUser={setUser} editing={editing} compact={compact} />
@@ -621,15 +692,6 @@ function DetailsCard({
 								onChange={(e) => setUser((p) => ({ ...p, lastName: e.target.value || null }))}
 							/>
 						</FormRow>
-						<FormRow label="Kiwi Legacy Account UUID">
-							<Input
-								value={user.kiwiLegacyAccountUuid ?? ''}
-								onChange={(e) =>
-									setUser((p) => ({ ...p, kiwiLegacyAccountUuid: e.target.value || null }))
-								}
-								placeholder="00000000-0000-0000-0000-000000000000"
-							/>
-						</FormRow>
 						<FormRow label="Is Active">
 							<label className="flex items-center gap-2 text-sm">
 								<Checkbox
@@ -647,20 +709,42 @@ function DetailsCard({
 						</ReadField>
 						<ReadField label="First Name">{user.firstName ?? <NA />}</ReadField>
 						<ReadField label="Last Name">{user.lastName ?? <NA />}</ReadField>
-						<div className={cn(showCompact && 'col-span-2')}>
-							<ReadField label="Kiwi Legacy Account UUID">
-								{user.kiwiLegacyAccountUuid ? (
-									<span className="font-mono break-all">{user.kiwiLegacyAccountUuid}</span>
-								) : (
-									<NA />
-								)}
-							</ReadField>
-						</div>
 						<ReadField label="Created">{formatTimestamp(user.createdAt)}</ReadField>
 						<ReadField label="Updated">
 							{user.updatedAt ? formatTimestamp(user.updatedAt) : <NA />}
 						</ReadField>
 					</>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+// ───────────────────────────── Additional Information ─────────────────────────────
+
+function AdditionalInfoCard({ user, setUser, editing }: EditableCardProps) {
+	return (
+		<Card className="h-full">
+			<SectionHeader icon={InfoIcon} title="Additional Information" />
+			<CardContent className="flex flex-col gap-5">
+				{editing && setUser ? (
+					<FormRow label="Kiwi Legacy Account UUID">
+						<Input
+							value={user.kiwiLegacyAccountUuid ?? ''}
+							onChange={(e) =>
+								setUser((p) => ({ ...p, kiwiLegacyAccountUuid: e.target.value || null }))
+							}
+							placeholder="00000000-0000-0000-0000-000000000000"
+						/>
+					</FormRow>
+				) : (
+					<ReadField label="Kiwi Legacy Account UUID">
+						{user.kiwiLegacyAccountUuid ? (
+							<span className="break-all font-mono">{user.kiwiLegacyAccountUuid}</span>
+						) : (
+							<NA />
+						)}
+					</ReadField>
 				)}
 			</CardContent>
 		</Card>
@@ -744,9 +828,12 @@ function ProfilesCard({ user, setUser, editing }: EditableCardProps) {
 	}
 
 	return (
-		<Card className="h-full">
+		<Card
+			className={cn('flex flex-col overflow-hidden', !editing && 'h-full')}
+			style={!editing ? { contain: 'size', containIntrinsicSize: '0 0' } : undefined}
+		>
 			<SectionHeader icon={UsersRoundIcon} title="Profiles" />
-			<CardContent>
+			<CardContent className={cn(!editing && 'min-h-0 flex-1 overflow-hidden')}>
 				{editing && setUser ? (
 					user.profiles.length === 0 ? (
 						<EmptyHint>No profiles found for this user.</EmptyHint>
@@ -806,7 +893,7 @@ function ProfilesCard({ user, setUser, editing }: EditableCardProps) {
 				) : user.profiles.length === 0 ? (
 					<EmptyHint>No profiles found for this user.</EmptyHint>
 				) : (
-					<ul className="flex flex-col divide-y divide-border">
+					<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 						{user.profiles.map((p, i) => (
 							<li key={p.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
 								<ProfileAvatar index={i} name={p.name} />
@@ -997,14 +1084,19 @@ function IdentityCard({ user, setUser, editing }: EditableCardProps) {
 						{user.identityDocuments.map((d, i) => (
 							<li
 								key={i}
-								className="flex shrink-0 items-center justify-between gap-4 rounded-lg border bg-muted/30 px-4 py-3"
+								className="flex shrink-0 items-center justify-between gap-3 rounded-lg bg-muted/40 p-4"
 							>
-								<span className="break-all font-mono text-sm font-medium text-foreground">
-									{d.code}
-								</span>
+								<div className="flex min-w-0 flex-col gap-1.5">
+									<span className="text-xs font-medium text-muted-foreground">
+										Identity Code
+									</span>
+									<span className="break-all font-mono text-sm font-medium text-foreground">
+										{d.code}
+									</span>
+								</div>
 								<Badge
 									variant="outline"
-									className="shrink-0 border-[#4664E1]/30 bg-[#4664E1]/10 uppercase text-[#4664E1]"
+									className="shrink-0 rounded-full border-border bg-background px-3 text-foreground/70 uppercase tracking-wide"
 								>
 									{identityKindLabel(d.kind)}
 								</Badge>
@@ -1160,12 +1252,6 @@ function SubscriptionsCard({ user, legacy }: ReadOnlyCardProps) {
 									<div className="flex shrink-0 flex-wrap items-center gap-2">
 										<Button variant="outline" size="sm" className="h-8">
 											Re-Verify Subscription
-										</Button>
-										<Button
-											size="sm"
-											className="h-8 bg-[#224089] text-white hover:bg-[#1b3470]"
-										>
-											Create Subscription Period
 										</Button>
 									</div>
 								</div>
@@ -1334,30 +1420,81 @@ function InvoiceReportsCard({ user, legacy }: ReadOnlyCardProps) {
 				{user.invoiceReports.length === 0 ? (
 					<EmptyHint>No invoice reports found for this user.</EmptyHint>
 				) : (
-					<div className="overflow-hidden rounded-lg border bg-card">
-						<div className="overflow-x-auto">
-							<Table>
-								<TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:border-b [&_th]:bg-muted [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
-									<TableRow>
-										<TableHead className="w-[110px]">Invoice ID</TableHead>
-										<TableHead>Order Number</TableHead>
-										<TableHead>Period</TableHead>
-										<TableHead>Transaction ID</TableHead>
-										<TableHead>Status</TableHead>
-										<TableHead>Timestamps</TableHead>
-									</TableRow>
-								</TableHeader>
-								<TableBody className="[&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_tr]:bg-card [&_td]:align-top">
-									{user.invoiceReports.map((r) => (
-										<InvoiceReportTableRow key={r.id} report={r} />
-									))}
-								</TableBody>
-							</Table>
-						</div>
+					<div className="flex flex-col gap-3">
+						{user.invoiceReports.map((r) => (
+							<InvoiceReportItemCard key={r.id} report={r} />
+						))}
 					</div>
 				)}
 			</CardContent>
 		</Card>
+	);
+}
+
+function InvoiceReportItemCard({ report }: { report: InvoiceReport }) {
+	return (
+		<div className="rounded-lg border bg-card p-4">
+			<div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+				<span className="text-sm">
+					<span className="font-medium text-muted-foreground">Invoice Report ID:</span>{' '}
+					<span className="font-semibold text-[#224089]">{report.id}</span>
+				</span>
+				<div className="flex items-center gap-2">
+					<Badge
+						variant="outline"
+						className={cn(
+							'gap-1.5',
+							report.isConfirmed
+								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
+								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
+						)}
+					>
+						<span
+							className="size-1.5 rounded-full"
+							style={{ backgroundColor: report.isConfirmed ? '#00B86E' : '#E8536A' }}
+						/>
+						{report.isConfirmed ? 'Confirmed' : 'Unconfirmed'}
+					</Badge>
+					<Badge
+						variant="outline"
+						className={cn(
+							'gap-1.5',
+							report.isSent
+								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
+								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
+						)}
+					>
+						<span
+							className="size-1.5 rounded-full"
+							style={{ backgroundColor: report.isSent ? '#00B86E' : '#E8536A' }}
+						/>
+						{report.isSent ? 'Sent' : 'Unsent'}
+					</Badge>
+				</div>
+			</div>
+			<div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				<ReadField label="Order Number">
+					<span className="font-mono">{report.orderNumber}</span>
+				</ReadField>
+				<ReadField label="Transaction ID">
+					<span className="break-all font-mono">{report.transactionId}</span>
+				</ReadField>
+				<ReadField label="Subscription Period ID">
+					<span className="font-mono text-[#224089]">{report.subscriptionPeriodId}</span>
+				</ReadField>
+				<ReadField label="Subscription Period">
+					<span className="break-all">
+						{formatTimestamp(report.subscriptionPeriodStart)} – {formatTimestamp(report.subscriptionPeriodEnd)}
+					</span>
+				</ReadField>
+				<ReadField label="Created At">
+					<span className="break-all">{formatTimestampWithTz(report.createdAt)}</span>
+				</ReadField>
+				<ReadField label="Updated At">
+					<span className="break-all">{formatTimestampWithTz(report.updatedAt)}</span>
+				</ReadField>
+			</div>
+		</div>
 	);
 }
 
@@ -1375,72 +1512,6 @@ function LegacyKV({
 			<dt className="font-medium text-muted-foreground">{label}:</dt>
 			<dd className="text-foreground">{value}</dd>
 		</div>
-	);
-}
-
-function InvoiceReportTableRow({ report }: { report: InvoiceReport }) {
-	return (
-		<TableRow>
-			<TableCell className="text-sm font-semibold text-[#224089]">{report.id}</TableCell>
-			<TableCell className="text-sm font-mono text-foreground">{report.orderNumber}</TableCell>
-			<TableCell>
-				<div className="flex flex-col gap-0.5 text-sm whitespace-nowrap">
-					<span className="font-semibold text-[#224089]">{report.subscriptionPeriodId}</span>
-					<span className="text-xs text-muted-foreground">
-						{formatTimestamp(report.subscriptionPeriodStart)} – {formatTimestamp(report.subscriptionPeriodEnd)}
-					</span>
-				</div>
-			</TableCell>
-			<TableCell className="break-all font-mono text-sm text-foreground">
-				{report.transactionId}
-			</TableCell>
-			<TableCell>
-				<div className="flex flex-col gap-1">
-					<Badge
-						variant="outline"
-						className={cn(
-							'gap-1.5 w-fit',
-							report.isConfirmed
-								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
-								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
-						)}
-					>
-						<span
-							className="size-1.5 rounded-full"
-							style={{ backgroundColor: report.isConfirmed ? '#00B86E' : '#E8536A' }}
-						/>
-						{report.isConfirmed ? 'Confirmed' : 'Unconfirmed'}
-					</Badge>
-					<Badge
-						variant="outline"
-						className={cn(
-							'gap-1.5 w-fit',
-							report.isSent
-								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
-								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
-						)}
-					>
-						<span
-							className="size-1.5 rounded-full"
-							style={{ backgroundColor: report.isSent ? '#00B86E' : '#E8536A' }}
-						/>
-						{report.isSent ? 'Sent' : 'Unsent'}
-					</Badge>
-				</div>
-			</TableCell>
-			<TableCell>
-				<div className="flex flex-col gap-0.5 text-xs whitespace-nowrap">
-					<span>
-						<span className="text-muted-foreground">Created:</span>{' '}
-						<span className="text-foreground">{formatTimestampWithTz(report.createdAt)}</span>
-					</span>
-					<span>
-						<span className="text-muted-foreground">Updated:</span>{' '}
-						<span className="text-foreground">{formatTimestampWithTz(report.updatedAt)}</span>
-					</span>
-				</div>
-			</TableCell>
-		</TableRow>
 	);
 }
 

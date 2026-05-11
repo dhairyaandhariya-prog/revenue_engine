@@ -23,45 +23,35 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+	BILLING_CYCLES,
+	TENANT_BRANDS,
+	billingShort,
+	formatPrice,
+	getBrand,
+	listSkus,
+	trialSummary,
+	type Sku,
+	type SkuStatus,
+} from '@/lib/skus';
 
-type Status = 'Active' | 'Inactive';
-
-type UserRow = {
-	id: string;
-	firstName: string | null;
-	lastName: string | null;
-	identityCode: string | null;
-	userStatus: Status;
-};
-
-const TOTAL_RECORDS = 930_404;
 const PAGE_SIZE = 12;
 
-const baseUsers: UserRow[] = [
-	{ id: '932301', firstName: 'Aiden', lastName: 'Carter', identityCode: '02263723321096', userStatus: 'Active' },
-	{ id: '932302', firstName: 'Sophia', lastName: 'Lee', identityCode: '55398587277', userStatus: 'Active' },
-	{ id: '932303', firstName: 'Marcus', lastName: 'Reed', identityCode: '02263723321096', userStatus: 'Active' },
-	{ id: '932304', firstName: 'Priya', lastName: 'Sharma', identityCode: null, userStatus: 'Active' },
-	{ id: '932305', firstName: 'Liam', lastName: "O'Connor", identityCode: null, userStatus: 'Inactive' },
-	{ id: '932306', firstName: 'Yuki', lastName: 'Tanaka', identityCode: '42549404084', userStatus: 'Active' },
-	{ id: '932307', firstName: 'Zara', lastName: 'Ahmed', identityCode: null, userStatus: 'Inactive' },
-	{ id: '932308', firstName: 'Diego', lastName: 'Vega', identityCode: null, userStatus: 'Active' },
-	{ id: '932309', firstName: 'Naomi', lastName: 'Park', identityCode: null, userStatus: 'Active' },
-	{ id: '932310', firstName: 'Ethan', lastName: 'Mendes', identityCode: '38217695501', userStatus: 'Active' },
-	{ id: '932311', firstName: null, lastName: null, identityCode: null, userStatus: 'Inactive' },
-	{ id: '932312', firstName: 'Bruna', lastName: 'Dias', identityCode: '55398587277', userStatus: 'Active' },
-];
-
 const FILTER_FIELDS = [
-	{ value: 'id', label: 'ID' },
-	{ value: 'first_name', label: 'First Name' },
-	{ value: 'last_name', label: 'Last Name' },
-	{ value: 'is_active', label: 'Is Active' },
-	{ value: 'identity_code', label: 'Identity Code' },
-	{ value: 'email', label: 'Email' },
-	{ value: 'transaction_id', label: 'Transaction ID' },
-	{ value: 'phone_number', label: 'Phone Number' },
+	{ value: 'sku_id', label: 'SKU ID' },
+	{ value: 'name', label: 'Name' },
+	{ value: 'tenant', label: 'Brand' },
+	{ value: 'billing_cycle', label: 'Billing Cycle' },
+	{ value: 'status', label: 'Status' },
+	{ value: 'trial_type', label: 'Trial Type' },
 ];
 
 const FILTER_OPERATORS = [
@@ -69,14 +59,13 @@ const FILTER_OPERATORS = [
 	{ value: 'is_not_equal_to', label: 'is not equal to' },
 	{ value: 'is_in', label: 'is in' },
 	{ value: 'is_not_in', label: 'is not in' },
-	{ value: 'exists', label: 'exists' },
 	{ value: 'is_like', label: 'is like' },
 	{ value: 'is_not_like', label: 'is not like' },
 	{ value: 'contains', label: 'contains' },
 ];
 
-function StatusBadge({ status }: { status: Status }) {
-	const active = status === 'Active';
+function StatusBadge({ status }: { status: SkuStatus }) {
+	const active = status === 'active';
 	return (
 		<Badge
 			variant="outline"
@@ -86,13 +75,31 @@ function StatusBadge({ status }: { status: Status }) {
 					: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]'
 			}
 		>
-			<span className="size-1.5 rounded-full" style={{ backgroundColor: active ? '#00B86E' : '#E8536A' }} />
-			{status}
+			<span
+				className="size-1.5 rounded-full"
+				style={{ backgroundColor: active ? '#00B86E' : '#E8536A' }}
+			/>
+			{active ? 'Active' : 'Inactive'}
 		</Badge>
 	);
 }
 
-// Lightweight fuzzy match: every char of needle appears in haystack in order.
+function BrandChip({ tenantId }: { tenantId: string }) {
+	const brand = getBrand(tenantId);
+	if (!brand) return <span className="text-muted-foreground/60">—</span>;
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<span
+				className="flex size-5 items-center justify-center rounded text-[10px] font-semibold text-white"
+				style={{ backgroundColor: brand.color }}
+			>
+				{brand.name[0]}
+			</span>
+			<span className="text-sm font-medium text-foreground">{brand.name}</span>
+		</span>
+	);
+}
+
 function fuzzyMatch(needle: string, haystack: string) {
 	if (!needle) return true;
 	const n = needle.toLowerCase();
@@ -105,32 +112,34 @@ function fuzzyMatch(needle: string, haystack: string) {
 	return false;
 }
 
-function rowMatches(u: UserRow, q: string) {
+function rowMatches(s: Sku, q: string) {
 	if (!q) return true;
-	return [u.id, u.firstName ?? '', u.lastName ?? '', u.identityCode ?? '', u.userStatus]
-		.some((s) => fuzzyMatch(q, s));
+	return [s.skuId, s.name, s.description, getBrand(s.tenantId)?.name ?? ''].some((v) =>
+		fuzzyMatch(q, v),
+	);
 }
 
-function fieldValue(u: UserRow, field: string): string | null {
+function fieldValue(s: Sku, field: string): string | null {
 	switch (field) {
-		case 'id':
-			return u.id;
-		case 'first_name':
-			return u.firstName;
-		case 'last_name':
-			return u.lastName;
-		case 'identity_code':
-			return u.identityCode;
-		case 'is_active':
-			return u.userStatus === 'Active' ? 'true' : 'false';
+		case 'sku_id':
+			return s.skuId;
+		case 'name':
+			return s.name;
+		case 'tenant':
+			return s.tenantId;
+		case 'billing_cycle':
+			return s.billingCycle;
+		case 'status':
+			return s.status;
+		case 'trial_type':
+			return s.trial.type;
 		default:
-			// Email / Transaction ID / Phone Number are not on the users mock — treat as null.
 			return null;
 	}
 }
 
-function evaluateRow(u: UserRow, row: FilterRow): boolean {
-	const fv = fieldValue(u, row.field);
+function evaluateRow(s: Sku, row: FilterRow): boolean {
+	const fv = fieldValue(s, row.field);
 	const target = row.value.trim();
 	const haystack = (fv ?? '').toLowerCase();
 	const needle = target.toLowerCase();
@@ -141,11 +150,13 @@ function evaluateRow(u: UserRow, row: FilterRow): boolean {
 		case 'is_not_equal_to':
 			return target === '' ? true : (fv ?? '') !== target;
 		case 'is_in':
-			return target === '' ? true : target.split(',').map((s) => s.trim()).includes(fv ?? '');
+			return target === ''
+				? true
+				: target.split(',').map((x) => x.trim()).includes(fv ?? '');
 		case 'is_not_in':
-			return target === '' ? true : !target.split(',').map((s) => s.trim()).includes(fv ?? '');
-		case 'exists':
-			return fv !== null && fv !== '';
+			return target === ''
+				? true
+				: !target.split(',').map((x) => x.trim()).includes(fv ?? '');
 		case 'is_like':
 		case 'contains':
 			return target === '' ? true : haystack.includes(needle);
@@ -156,34 +167,41 @@ function evaluateRow(u: UserRow, row: FilterRow): boolean {
 	}
 }
 
-function passesFilters(u: UserRow, rows: FilterRow[]): boolean {
+function passesFilters(s: Sku, rows: FilterRow[]): boolean {
 	if (rows.length === 0) return true;
-	let result = evaluateRow(u, rows[0]);
+	let result = evaluateRow(s, rows[0]);
 	for (let i = 1; i < rows.length; i++) {
-		const m = evaluateRow(u, rows[i]);
+		const m = evaluateRow(s, rows[i]);
 		result = rows[i].connector === 'and' ? result && m : result || m;
 	}
 	return result;
 }
 
-type SortKey = 'id' | 'firstName' | 'lastName' | 'identityCode' | 'userStatus';
+type SortKey = 'skuId' | 'name' | 'tenantId' | 'billingCycle' | 'status';
 
-export default function UsersPage() {
+export default function SkusPage() {
 	const [selected, setSelected] = React.useState<Set<string>>(new Set());
 	const [page, setPage] = React.useState(1);
 	const [search, setSearch] = React.useState('');
-	const [sortKey, setSortKey] = React.useState<SortKey>('id');
+	const [sortKey, setSortKey] = React.useState<SortKey>('skuId');
 	const [sortDir, setSortDir] = React.useState<SortDir>('asc');
 	const [filters, setFilters] = React.useState<FilterRow[]>([]);
 	const [filterOpen, setFilterOpen] = React.useState(false);
+	const [brandFilter, setBrandFilter] = React.useState<string>('all');
+	const [statusFilter, setStatusFilter] = React.useState<'all' | SkuStatus>('all');
 
 	function setSort(key: SortKey, dir: SortDir) {
 		setSortKey(key);
 		setSortDir(dir);
 	}
 
-	const users = React.useMemo(() => {
-		const rows = baseUsers.filter((u) => rowMatches(u, search) && passesFilters(u, filters));
+	const baseSkus = React.useMemo(() => listSkus(), []);
+
+	const skus = React.useMemo(() => {
+		const rows = baseSkus
+			.filter((s) => (brandFilter === 'all' ? true : s.tenantId === brandFilter))
+			.filter((s) => (statusFilter === 'all' ? true : s.status === statusFilter))
+			.filter((s) => rowMatches(s, search) && passesFilters(s, filters));
 		if (sortDir === null) return rows;
 		const dir = sortDir === 'asc' ? 1 : -1;
 		return [...rows].sort((a, b) => {
@@ -191,17 +209,18 @@ export default function UsersPage() {
 			const bv = String(b[sortKey] ?? '');
 			return av.localeCompare(bv, undefined, { numeric: true }) * dir;
 		});
-	}, [search, sortKey, sortDir, filters]);
+	}, [baseSkus, search, sortKey, sortDir, filters, brandFilter, statusFilter]);
 
-	const totalPages = Math.ceil(TOTAL_RECORDS / PAGE_SIZE);
-	const startIdx = (page - 1) * PAGE_SIZE + 1;
-	const endIdx = Math.min(page * PAGE_SIZE, TOTAL_RECORDS);
+	const totalRecords = skus.length;
+	const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+	const startIdx = totalRecords === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+	const endIdx = Math.min(page * PAGE_SIZE, totalRecords);
 
-	const allSelected = users.length > 0 && selected.size === users.length;
+	const allSelected = skus.length > 0 && selected.size === skus.length;
 	const someSelected = selected.size > 0 && !allSelected;
 
 	function toggleAll(checked: boolean) {
-		setSelected(checked ? new Set(users.map((u) => u.id)) : new Set());
+		setSelected(checked ? new Set(skus.map((s) => s.id)) : new Set());
 	}
 
 	function toggleRow(id: string, checked: boolean) {
@@ -221,46 +240,76 @@ export default function UsersPage() {
 
 	return (
 		<>
-			<PageHeader crumbs={[{ label: 'Nexus' }, { label: 'User Management' }, { label: 'Users' }]} />
+			<PageHeader crumbs={[{ label: 'Nexus' }, { label: 'SKU Catalog' }, { label: 'All SKUs' }]} />
 			<div className="flex min-h-0 flex-1 flex-col gap-4 px-6 py-6">
 				<div className="flex flex-col gap-4">
 					<div className="flex items-center gap-2">
-						<h1 className="text-xl font-semibold tracking-tight">Users</h1>
+						<h1 className="text-xl font-semibold tracking-tight">Product Grid</h1>
 						<Badge variant="secondary" className="rounded-full px-2 font-medium tabular-nums">
-							{TOTAL_RECORDS.toLocaleString()}
+							{baseSkus.length.toLocaleString()}
 						</Badge>
 					</div>
 					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="relative w-full max-w-sm">
-							<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								value={search}
-								onChange={(e) => setSearch(e.target.value)}
-								placeholder="Search users..."
-								className="h-9 pl-8 pr-9"
-							/>
-							{search ? (
-								<button
-									type="button"
-									aria-label="Clear search"
-									onClick={() => setSearch('')}
-									className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-								>
-									<XIcon className="size-3.5" />
-								</button>
-							) : null}
+						<div className="flex flex-wrap items-center gap-2">
+							<div className="relative w-full max-w-sm">
+								<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									value={search}
+									onChange={(e) => setSearch(e.target.value)}
+									placeholder="Search SKUs..."
+									className="h-9 pl-8 pr-9"
+								/>
+								{search ? (
+									<button
+										type="button"
+										aria-label="Clear search"
+										onClick={() => setSearch('')}
+										className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+									>
+										<XIcon className="size-3.5" />
+									</button>
+								) : null}
+							</div>
+							<Select value={brandFilter} onValueChange={setBrandFilter}>
+								<SelectTrigger size="sm" className="h-9 min-w-[160px]">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All brands</SelectItem>
+									{TENANT_BRANDS.map((b) => (
+										<SelectItem key={b.id} value={b.id}>
+											{b.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Select
+								value={statusFilter}
+								onValueChange={(v) => setStatusFilter(v as 'all' | SkuStatus)}
+							>
+								<SelectTrigger size="sm" className="h-9 min-w-[140px]">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All statuses</SelectItem>
+									<SelectItem value="active">Active</SelectItem>
+									<SelectItem value="inactive">Inactive</SelectItem>
+								</SelectContent>
+							</Select>
 						</div>
 						<div className="flex items-center gap-2">
 							{hasSelection ? (
 								<>
-									<span className="mr-1 text-xs text-muted-foreground">{selected.size} selected</span>
+									<span className="mr-1 text-xs text-muted-foreground">
+										{selected.size} selected
+									</span>
 									<Button variant="outline" size="sm" className="h-9">
 										<CheckCircle2Icon />
 										Active
 									</Button>
 									<Button variant="outline" size="sm" className="h-9">
 										<CircleSlashIcon />
-										Inactive
+										Retire
 									</Button>
 									<Button
 										variant="outline"
@@ -302,9 +351,9 @@ export default function UsersPage() {
 								</PopoverContent>
 							</Popover>
 							<Button asChild size="sm" className="h-9 bg-[#224089] text-white hover:bg-[#1b3470]">
-								<a href="/users/new">
+								<a href="/skus/new">
 									<PlusIcon />
-									Create User
+									Create SKU
 								</a>
 							</Button>
 						</div>
@@ -323,71 +372,97 @@ export default function UsersPage() {
 											onCheckedChange={(v) => toggleAll(v === true)}
 										/>
 									</TableHead>
-									<TableHead className="w-[110px]">
-										<SortableHead label="ID" dir={dirFor('id')} onChange={headSetter('id')} />
+									<TableHead className="w-[220px]">
+										<SortableHead label="SKU ID" dir={dirFor('skuId')} onChange={headSetter('skuId')} />
 									</TableHead>
 									<TableHead>
+										<SortableHead label="Name" dir={dirFor('name')} onChange={headSetter('name')} />
+									</TableHead>
+									<TableHead className="w-[160px]">
 										<SortableHead
-											label="First Name"
-											dir={dirFor('firstName')}
-											onChange={headSetter('firstName')}
+											label="Brand"
+											dir={dirFor('tenantId')}
+											onChange={headSetter('tenantId')}
 										/>
 									</TableHead>
-									<TableHead>
+									<TableHead className="w-[120px]">
 										<SortableHead
-											label="Last Name"
-											dir={dirFor('lastName')}
-											onChange={headSetter('lastName')}
+											label="Cycle"
+											dir={dirFor('billingCycle')}
+											onChange={headSetter('billingCycle')}
 										/>
 									</TableHead>
-									<TableHead>
+									<TableHead className="w-[160px]">Price</TableHead>
+									<TableHead className="w-[160px]">Trial</TableHead>
+									<TableHead className="w-[120px]">
 										<SortableHead
-											label="Identity Code"
-											dir={dirFor('identityCode')}
-											onChange={headSetter('identityCode')}
-										/>
-									</TableHead>
-									<TableHead>
-										<SortableHead
-											label="User Status"
-											dir={dirFor('userStatus')}
-											onChange={headSetter('userStatus')}
+											label="Status"
+											dir={dirFor('status')}
+											onChange={headSetter('status')}
 										/>
 									</TableHead>
 									<TableHead className="w-[96px] text-right">Actions</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{users.map((u) => {
-									const isSelected = selected.has(u.id);
+								{skus.map((s) => {
+									const isSelected = selected.has(s.id);
+									const primary = s.prices[0];
+									const extra = s.prices.length - 1;
 									return (
-										<TableRow key={u.id} data-state={isSelected ? 'selected' : undefined}>
+										<TableRow key={s.id} data-state={isSelected ? 'selected' : undefined}>
 											<TableCell>
 												<Checkbox
-													aria-label={`Select user ${u.id}`}
+													aria-label={`Select SKU ${s.skuId}`}
 													checked={isSelected}
-													onCheckedChange={(v) => toggleRow(u.id, v === true)}
+													onCheckedChange={(v) => toggleRow(s.id, v === true)}
 												/>
 											</TableCell>
-											<TableCell className="text-xs font-medium">
+											<TableCell className="text-xs">
 												<a
-													href={`/users/${u.id}`}
-													className="text-[#224089] hover:underline"
+													href={`/skus/${s.id}`}
+													className="font-mono font-medium text-[#224089] hover:underline"
 												>
-													{u.id}
+													{s.skuId}
 												</a>
 											</TableCell>
 											<TableCell className="text-sm">
-												{u.firstName ?? <span className="text-muted-foreground/60">—</span>}
-											</TableCell>
-											<TableCell className="text-sm">
-												{u.lastName ?? <span className="text-muted-foreground/60">—</span>}
-											</TableCell>
-											<TableCell className="text-xs">
-												{u.identityCode ?? <span className="text-muted-foreground/60">—</span>}
+												<div className="flex flex-col gap-0.5">
+													<span className="font-medium text-foreground">{s.name}</span>
+													<span className="line-clamp-1 text-xs text-muted-foreground">
+														{s.description}
+													</span>
+												</div>
 											</TableCell>
 											<TableCell>
-												<StatusBadge status={u.userStatus} />
+												<BrandChip tenantId={s.tenantId} />
+											</TableCell>
+											<TableCell className="text-sm capitalize">
+												{BILLING_CYCLES.find((c) => c.value === s.billingCycle)?.label.toLowerCase()}
+											</TableCell>
+											<TableCell>
+												<div className="flex items-center gap-1.5">
+													<span className="text-sm font-medium tabular-nums text-foreground">
+														{primary ? formatPrice(primary) : '—'}
+													</span>
+													<span className="text-xs text-muted-foreground">
+														{billingShort(s.billingCycle)}
+													</span>
+													{extra > 0 ? (
+														<Badge
+															variant="secondary"
+															className="ml-1 h-4 min-w-4 px-1 text-[10px] tabular-nums"
+														>
+															+{extra}
+														</Badge>
+													) : null}
+												</div>
+											</TableCell>
+											<TableCell className="text-xs text-muted-foreground">
+												{trialSummary(s.trial)}
+											</TableCell>
+											<TableCell>
+												<StatusBadge status={s.status} />
 											</TableCell>
 											<TableCell className="text-right">
 												<div className="flex items-center justify-end gap-1">
@@ -395,17 +470,17 @@ export default function UsersPage() {
 														asChild
 														variant="ghost"
 														size="icon-sm"
-														aria-label={`Edit user ${u.id}`}
+														aria-label={`Edit SKU ${s.skuId}`}
 														className="size-8 text-muted-foreground hover:bg-[#224089]/10 hover:text-[#224089]"
 													>
-														<a href={`/users/${u.id}?edit=1`}>
+														<a href={`/skus/${s.id}?edit=1`}>
 															<PencilIcon />
 														</a>
 													</Button>
 													<Button
 														variant="ghost"
 														size="icon-sm"
-														aria-label={`Delete user ${u.id}`}
+														aria-label={`Delete SKU ${s.skuId}`}
 														className="size-8 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
 													>
 														<Trash2Icon />
@@ -415,10 +490,10 @@ export default function UsersPage() {
 										</TableRow>
 									);
 								})}
-								{users.length === 0 ? (
+								{skus.length === 0 ? (
 									<TableRow>
-										<TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-											No users match your search.
+										<TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+											No SKUs match your search.
 										</TableCell>
 									</TableRow>
 								) : null}
@@ -431,12 +506,15 @@ export default function UsersPage() {
 							<span className="tabular-nums">{startIdx.toLocaleString()}</span>
 							{'–'}
 							<span className="tabular-nums">{endIdx.toLocaleString()}</span> of{' '}
-							<span className="tabular-nums">{TOTAL_RECORDS.toLocaleString()}</span>
+							<span className="tabular-nums">{totalRecords.toLocaleString()}</span>
 						</span>
 						<div className="flex items-center gap-3">
 							<span className="text-muted-foreground">
-								Page <span className="font-medium text-foreground tabular-nums">{page.toLocaleString()}</span> of{' '}
-								<span className="tabular-nums">{totalPages.toLocaleString()}</span>
+								Page{' '}
+								<span className="font-medium text-foreground tabular-nums">
+									{page.toLocaleString()}
+								</span>{' '}
+								of <span className="tabular-nums">{totalPages.toLocaleString()}</span>
 							</span>
 							<div className="flex items-center gap-1">
 								<Button

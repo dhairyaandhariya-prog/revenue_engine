@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			:root {
+				--primary: #224089;
+				--primary-hover: #1b3470;
+				--foreground: #111114;
+				--muted-foreground: #5a5a66;
+				--border: #e6e6eb;
+				--background: #fafafa;
+			}
+			html, body { margin: 0; padding: 0; }
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+				color: var(--foreground);
+				background: #fff;
+				padding: 16px;
+				font-size: 12px;
+				line-height: 1.5;
+			}
+			h2 {
+				margin: 0 0 6px;
+				font-size: 14px;
+				font-weight: 600;
+				letter-spacing: -0.01em;
+			}
+			p {
+				margin: 0 0 12px;
+				color: var(--muted-foreground);
+			}
+			ul {
+				margin: 0 0 16px;
+				padding-left: 18px;
+				color: var(--muted-foreground);
+			}
+			li { margin: 2px 0; }
+			code {
+				font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+				font-size: 11px;
+				background: var(--background);
+				padding: 1px 5px;
+				border-radius: 4px;
+			}
+			button {
+				width: 100%;
+				padding: 10px 16px;
+				background: var(--primary);
+				color: white;
+				border: 0;
+				border-radius: 8px;
+				font-size: 13px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: background-color 120ms;
+			}
+			button:hover { background: var(--primary-hover); }
+		</style>
+	</head>
+	<body>
+		<h2>Nexus design system — primitives</h2>
+		<p>Stamps the tokens and the primitive component set onto the current page.</p>
+		<ul>
+			<li>13 color variables in collection <code>Nexus</code></li>
+			<li>Button (3 variants × 2 sizes)</li>
+			<li>Badge (4 variants), Switch (2 states), Checkbox (3 states)</li>
+			<li>Card, Input, Select, Avatar</li>
+			<li>Tabs (default + line), Table</li>
+			<li>Empty, Tooltip, Spinner, Separator</li>
+		</ul>
+		<button onclick="parent.postMessage({ pluginMessage: { type: 'generate' } }, '*')">
+			Generate
+		</button>
+	</body>
+</html>
