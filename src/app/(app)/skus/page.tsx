@@ -16,6 +16,7 @@ import {
 	XIcon,
 } from 'lucide-react';
 import { AdvancedFilter, type FilterRow } from '@/components/advanced-filter';
+import { DeleteSkuDialog } from '@/components/delete-sku-dialog';
 import { PageHeader } from '@/components/page-header';
 import { SortableHead, type SortDir } from '@/components/sortable-head';
 import { useTenant } from '@/components/tenant-context';
@@ -167,13 +168,20 @@ export default function SkusPage() {
 	const [filters, setFilters] = React.useState<FilterRow[]>([]);
 	const [filterOpen, setFilterOpen] = React.useState(false);
 	const [statusFilter, setStatusFilter] = React.useState<'all' | SkuStatus>('all');
+	const [deletedIds, setDeletedIds] = React.useState<Set<string>>(new Set());
+	const [pendingDelete, setPendingDelete] = React.useState<
+		{ id: string; skuId: string; name: string }[] | null
+	>(null);
 
 	function setSort(key: SortKey, dir: SortDir) {
 		setSortKey(key);
 		setSortDir(dir);
 	}
 
-	const baseSkus = React.useMemo(() => listSkus().filter((s) => s.tenantId === tenantId), [tenantId]);
+	const baseSkus = React.useMemo(
+		() => listSkus().filter((s) => s.tenantId === tenantId && !deletedIds.has(s.id)),
+		[tenantId, deletedIds],
+	);
 
 	const skus = React.useMemo(() => {
 		const rows = baseSkus
@@ -215,6 +223,33 @@ export default function SkusPage() {
 	const dirFor = (key: SortKey): SortDir => (sortKey === key ? sortDir : null);
 	const headSetter = (key: SortKey) => (dir: SortDir) => setSort(key, dir);
 
+	function openDeleteOne(s: Sku) {
+		setPendingDelete([{ id: s.id, skuId: s.skuId, name: s.name }]);
+	}
+
+	function openDeleteSelected() {
+		const targets = baseSkus
+			.filter((s) => selected.has(s.id))
+			.map((s) => ({ id: s.id, skuId: s.skuId, name: s.name }));
+		if (targets.length > 0) setPendingDelete(targets);
+	}
+
+	function confirmDelete() {
+		if (!pendingDelete) return;
+		const ids = pendingDelete.map((p) => p.id);
+		setDeletedIds((prev) => {
+			const next = new Set(prev);
+			ids.forEach((id) => next.add(id));
+			return next;
+		});
+		setSelected((prev) => {
+			const next = new Set(prev);
+			ids.forEach((id) => next.delete(id));
+			return next;
+		});
+		setPendingDelete(null);
+	}
+
 	return (
 		<>
 			<PageHeader crumbs={[{ label: 'Nexus' }, { label: 'SKU Catalog' }, { label: 'All SKUs' }]} />
@@ -234,42 +269,40 @@ export default function SkusPage() {
 							<span className="font-medium text-foreground">{tenant.name}</span>
 						</span>
 					</div>
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="flex flex-wrap items-center gap-2">
-							<div className="relative w-full max-w-sm">
-								<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-								<Input
-									value={search}
-									onChange={(e) => setSearch(e.target.value)}
-									placeholder="Search SKUs..."
-									className="h-9 pl-8 pr-9"
-								/>
-								{search ? (
-									<button
-										type="button"
-										aria-label="Clear search"
-										onClick={() => setSearch('')}
-										className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-									>
-										<XIcon className="size-3.5" />
-									</button>
-								) : null}
-							</div>
-							<Select
-								value={statusFilter}
-								onValueChange={(v) => setStatusFilter(v as 'all' | SkuStatus)}
-							>
-								<SelectTrigger className="!h-9 min-w-[140px]">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All statuses</SelectItem>
-									<SelectItem value="active">Active</SelectItem>
-									<SelectItem value="inactive">Inactive</SelectItem>
-								</SelectContent>
-							</Select>
+					<div className="flex flex-wrap items-center gap-2">
+						<div className="relative w-full sm:w-72">
+							<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								value={search}
+								onChange={(e) => setSearch(e.target.value)}
+								placeholder="Search SKUs..."
+								className="h-9 pl-8 pr-9"
+							/>
+							{search ? (
+								<button
+									type="button"
+									aria-label="Clear search"
+									onClick={() => setSearch('')}
+									className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+								>
+									<XIcon className="size-3.5" />
+								</button>
+							) : null}
 						</div>
-						<div className="flex items-center gap-2">
+						<Select
+							value={statusFilter}
+							onValueChange={(v) => setStatusFilter(v as 'all' | SkuStatus)}
+						>
+							<SelectTrigger className="!h-9 min-w-[140px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All statuses</SelectItem>
+								<SelectItem value="active">Active</SelectItem>
+								<SelectItem value="inactive">Inactive</SelectItem>
+							</SelectContent>
+						</Select>
+						<div className="ml-auto flex flex-wrap items-center gap-2">
 							{hasSelection ? (
 								<>
 									<span className="mr-1 text-xs text-muted-foreground">
@@ -281,12 +314,13 @@ export default function SkusPage() {
 									</Button>
 									<Button variant="outline" size="sm" className="h-9">
 										<CircleSlashIcon />
-										Retire
+										Inactive
 									</Button>
 									<Button
 										variant="outline"
 										size="sm"
 										className="h-9 border-[#E8536A]/30 bg-[#E8536A]/5 text-[#E8536A] hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+										onClick={openDeleteSelected}
 									>
 										<Trash2Icon />
 										Delete
@@ -439,6 +473,7 @@ export default function SkusPage() {
 														size="icon-sm"
 														aria-label={`Delete SKU ${s.skuId}`}
 														className="size-8 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+														onClick={() => openDeleteOne(s)}
 													>
 														<Trash2Icon />
 													</Button>
@@ -519,6 +554,15 @@ export default function SkusPage() {
 					</div>
 				</div>
 			</div>
+
+			<DeleteSkuDialog
+				open={pendingDelete !== null}
+				onOpenChange={(o) => {
+					if (!o) setPendingDelete(null);
+				}}
+				skus={pendingDelete ?? []}
+				onConfirm={confirmDelete}
+			/>
 		</>
 	);
 }
