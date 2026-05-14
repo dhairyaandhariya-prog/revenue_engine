@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import {
+	Boxes,
 	Building2,
 	ChevronDown,
 	ChevronsUpDown,
@@ -19,6 +20,7 @@ import {
 	Wrench,
 } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
+import { useTenant } from '@/components/tenant-context';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -121,6 +123,17 @@ const navGroups: NavGroup[] = [
 			{ title: 'Stripe' },
 			{ title: 'Minu' },
 			{ title: 'Coupon Codes' },
+		],
+	},
+	{
+		label: 'SKU Catalog',
+		icon: Boxes,
+		items: [
+			{ title: 'All SKUs', href: '/skus' },
+			{ title: 'Plans' },
+			{ title: 'Trial Configurations' },
+			{ title: 'Pricing History' },
+			{ title: 'Coupon Eligibility' },
 		],
 	},
 	{
@@ -229,7 +242,7 @@ function TenantMark({ tenant, className }: { tenant: Tenant; className?: string 
 function FooterTenantSwitcher() {
 	const { state, isMobile } = useSidebar();
 	const collapsed = state === 'collapsed' && !isMobile;
-	const [activeId, setActiveId] = React.useState<string>('playkids');
+	const { activeId, setActiveId } = useTenant();
 	const [switchingTo, setSwitchingTo] = React.useState<Tenant | null>(null);
 	const switchTimerRef = React.useRef<number | null>(null);
 	const active = tenants.find((t) => t.id === activeId) ?? tenants[0];

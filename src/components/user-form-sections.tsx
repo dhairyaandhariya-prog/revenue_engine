@@ -7,22 +7,26 @@ import {
 	IdCardIcon,
 	KeyRoundIcon,
 	MapPinIcon,
+	PencilIcon,
 	PlusIcon,
 	Trash2Icon,
 	UserIcon,
 	UsersRoundIcon,
 } from 'lucide-react';
 import * as React from 'react';
+import { StatusSwitch } from '@/components/status-switch';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import {
 	CREDENTIAL_KINDS,
 	IDENTITY_KINDS,
 	PROFILE_CHARACTERS,
+	identityKindLabel,
 	type CredentialKindValue,
 	type IdentityDocument,
 	type IdentityKind,
@@ -159,12 +163,12 @@ function credentialIdentifierField(
 // ─── exported sections ───────────────────────────────────────────────
 
 export function UserDetailsFormSection({ value, onChange }: Props) {
+	// Credentials are populated from the Herald API, so they are not part of the create form.
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+			<div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[3fr_7fr]">
 				<DetailsCard value={value} onChange={onChange} />
 				<IdentityCard value={value} onChange={onChange} />
-				<CredentialsCard value={value} onChange={onChange} />
 			</div>
 			<ProfilesCard value={value} onChange={onChange} />
 			<AddressCard value={value} onChange={onChange} />
@@ -238,111 +242,190 @@ function DetailsCard({ value, onChange }: Props) {
 						onChange={(e) => onChange((p) => ({ ...p, lastName: e.target.value }))}
 					/>
 				</FormRow>
-				<FormRow label="Kiwi Legacy Account UUID">
-					<Input
-						value={value.kiwiLegacyAccountUuid}
-						onChange={(e) => onChange((p) => ({ ...p, kiwiLegacyAccountUuid: e.target.value }))}
-						placeholder="00000000-0000-0000-0000-000000000000"
-					/>
-				</FormRow>
 				<FormRow label="Status" required>
-					<div className="flex items-center gap-3">
-						<Switch
-							checked={value.isActive}
-							onCheckedChange={(v) => onChange((p) => ({ ...p, isActive: v }))}
-						/>
-						<span className="text-sm text-muted-foreground">
-							{value.isActive ? 'Active' : 'Inactive'}
-						</span>
-					</div>
+					<StatusSwitch
+						active={value.isActive}
+						onChange={(v) => onChange((p) => ({ ...p, isActive: v }))}
+					/>
 				</FormRow>
 			</CardContent>
 		</Card>
 	);
 }
 
+const EMPTY_IDENTITY_DRAFT: IdentityDocument & { _id: string } = {
+	_id: '',
+	code: '',
+	kind: 'cpf',
+};
+
 function IdentityCard({ value, onChange }: Props) {
-	function addDocument() {
-		onChange((p) => ({
-			...p,
-			identityDocuments: [...p.identityDocuments, { code: '', kind: 'cpf' as IdentityKind }],
-		}));
+	const [draft, setDraft] = React.useState<typeof EMPTY_IDENTITY_DRAFT>(EMPTY_IDENTITY_DRAFT);
+	const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
+
+	function commitDraft() {
+		if (!draft.code.trim()) return;
+		const doc: IdentityDocument = { code: draft.code.trim(), kind: draft.kind };
+		if (editingIndex !== null) {
+			onChange((p) => ({
+				...p,
+				identityDocuments: p.identityDocuments.map((d, i) => (i === editingIndex ? doc : d)),
+			}));
+			setEditingIndex(null);
+		} else {
+			onChange((p) => ({ ...p, identityDocuments: [...p.identityDocuments, doc] }));
+		}
+		setDraft(EMPTY_IDENTITY_DRAFT);
 	}
+
+	function startEdit(idx: number) {
+		const d = value.identityDocuments[idx];
+		if (!d) return;
+		setDraft({ _id: String(idx), code: d.code, kind: d.kind });
+		setEditingIndex(idx);
+	}
+
+	function cancelEdit() {
+		setEditingIndex(null);
+		setDraft(EMPTY_IDENTITY_DRAFT);
+	}
+
 	function removeDocument(idx: number) {
-		onChange((p) => ({
-			...p,
-			identityDocuments: p.identityDocuments.filter((_, i) => i !== idx),
-		}));
+		onChange((p) => ({ ...p, identityDocuments: p.identityDocuments.filter((_, i) => i !== idx) }));
+		if (editingIndex === idx) {
+			setEditingIndex(null);
+			setDraft(EMPTY_IDENTITY_DRAFT);
+		}
 	}
-	function updateDocument(idx: number, patch: Partial<IdentityDocument>) {
-		onChange((p) => ({
-			...p,
-			identityDocuments: p.identityDocuments.map((d, i) =>
-				i === idx ? { ...d, ...patch } : d,
-			),
-		}));
-	}
-	const addBtn = (
-		<Button type="button" variant="outline" size="sm" className="h-8" onClick={addDocument}>
-			<PlusIcon />
-			Add
-		</Button>
-	);
+
 	return (
-		<Card
-			className="flex h-full flex-col overflow-hidden"
-			style={{ contain: 'size', containIntrinsicSize: '0 0' }}
-		>
-			<SectionHeader icon={IdCardIcon} title="Identity Document" action={addBtn} />
-			<CardContent className="min-h-0 flex-1 overflow-hidden">
-				{value.identityDocuments.length === 0 ? (
-					<EmptyHint>No documents yet. Click Add to create one.</EmptyHint>
-				) : (
-					<ul className="flex h-full flex-col gap-4 overflow-y-auto pr-1">
-						{value.identityDocuments.map((d, i) => (
-							<li key={i} className="flex flex-col gap-3 rounded-lg border p-3">
-								<div className="flex items-center justify-between border-b pb-3">
-									<span className="text-sm font-medium text-muted-foreground">
-										Document {i + 1}
-									</span>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon-sm"
-										className="size-7 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
-										onClick={() => removeDocument(i)}
-										aria-label={`Remove document ${i + 1}`}
-									>
-										<Trash2Icon />
-									</Button>
-								</div>
-								<FormRow label="Kind">
-									<Select
-										value={d.kind}
-										onValueChange={(v) => updateDocument(i, { kind: v as IdentityKind })}
-									>
-										<SelectTrigger className="w-full">
-											<SelectValue placeholder="Identity kind" />
-										</SelectTrigger>
-										<SelectContent>
-											{IDENTITY_KINDS.map((k) => (
-												<SelectItem key={k.value} value={k.value}>
-													{k.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</FormRow>
-								<FormRow label="Identity Code">
-									<Input
-										value={d.code}
-										onChange={(e) => updateDocument(i, { code: e.target.value })}
-									/>
-								</FormRow>
-							</li>
-						))}
-					</ul>
-				)}
+		<Card className="h-full">
+			<SectionHeader icon={IdCardIcon} title="Identity Document" />
+			<CardContent>
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
+					{/* Draft form (left) */}
+					<div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+						<FormRow label="Kind">
+							<Select
+								value={draft.kind}
+								onValueChange={(v) => setDraft((d) => ({ ...d, kind: v as IdentityKind }))}
+							>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="Identity kind" />
+								</SelectTrigger>
+								<SelectContent>
+									{IDENTITY_KINDS.map((k) => (
+										<SelectItem key={k.value} value={k.value}>
+											{k.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</FormRow>
+						<FormRow label="Identity Code">
+							<Input
+								value={draft.code}
+								onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+							/>
+						</FormRow>
+						<div className="mt-1 flex items-center gap-2">
+							{editingIndex !== null ? (
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="h-9 flex-1"
+									onClick={cancelEdit}
+								>
+									Cancel
+								</Button>
+							) : null}
+							<Button
+								type="button"
+								size="sm"
+								className="h-9 flex-1 bg-[#224089] text-white hover:bg-[#1b3470] disabled:opacity-50"
+								onClick={commitDraft}
+								disabled={!draft.code.trim()}
+							>
+								<PlusIcon />
+								{editingIndex !== null ? 'Update' : 'Add'}
+							</Button>
+						</div>
+					</div>
+
+					{/* Documents table (right) */}
+					<div
+						className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card"
+						style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+					>
+						<div className="min-h-0 flex-1 overflow-auto">
+							<Table>
+								<TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:border-b [&_th]:bg-muted [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
+									<TableRow>
+										<TableHead>Identity Code</TableHead>
+										<TableHead>Kind</TableHead>
+										<TableHead className="w-[100px] text-right">Action</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody className="[&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_tr]:bg-card">
+									{value.identityDocuments.length === 0 ? (
+										<TableRow>
+											<TableCell
+												colSpan={3}
+												className="py-10 text-center text-sm text-muted-foreground"
+											>
+												No documents yet. Use the form on the left to add one.
+											</TableCell>
+										</TableRow>
+									) : (
+										value.identityDocuments.map((d, i) => (
+											<TableRow
+												key={i}
+												data-state={editingIndex === i ? 'selected' : undefined}
+											>
+												<TableCell className="break-all font-mono text-sm font-medium text-foreground">
+													{d.code || <span className="text-muted-foreground/60">—</span>}
+												</TableCell>
+												<TableCell>
+													<Badge
+														variant="outline"
+														className="border-[#4664E1]/30 bg-[#4664E1]/10 uppercase text-[#4664E1]"
+													>
+														{identityKindLabel(d.kind)}
+													</Badge>
+												</TableCell>
+												<TableCell className="text-right">
+													<div className="flex justify-end gap-1">
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															className="size-8 text-muted-foreground hover:bg-[#224089]/10 hover:text-[#224089]"
+															onClick={() => startEdit(i)}
+															aria-label={`Edit document ${i + 1}`}
+														>
+															<PencilIcon />
+														</Button>
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															className="size-8 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+															onClick={() => removeDocument(i)}
+															aria-label={`Delete document ${i + 1}`}
+														>
+															<Trash2Icon />
+														</Button>
+													</div>
+												</TableCell>
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
+						</div>
+					</div>
+				</div>
 			</CardContent>
 		</Card>
 	);
@@ -439,94 +522,195 @@ function CredentialsCard({ value, onChange }: Props) {
 	);
 }
 
+const EMPTY_PROFILE_DRAFT: UserProfile = {
+	id: '',
+	name: '',
+	character: 'Kate',
+	birthdate: '',
+	createdAt: '',
+	updatedAt: null,
+};
+
 function ProfilesCard({ value, onChange }: Props) {
-	function addProfile() {
-		onChange((p) => ({
-			...p,
-			profiles: [
-				...p.profiles,
-				{
-					id: `new-${p.profiles.length + 1}`,
-					name: '',
-					character: 'Kate',
-					birthdate: '',
-					createdAt: '',
-					updatedAt: null,
-				},
-			],
-		}));
+	const [draft, setDraft] = React.useState<UserProfile>(EMPTY_PROFILE_DRAFT);
+	const [editingId, setEditingId] = React.useState<string | null>(null);
+
+	function commitDraft() {
+		if (!draft.name.trim()) return;
+		if (editingId) {
+			onChange((p) => ({
+				...p,
+				profiles: p.profiles.map((pr) =>
+					pr.id === editingId ? { ...draft, id: editingId } : pr,
+				),
+			}));
+			setEditingId(null);
+		} else {
+			const id = `new-${Date.now()}`;
+			onChange((p) => ({
+				...p,
+				profiles: [...p.profiles, { ...draft, id }],
+			}));
+		}
+		setDraft(EMPTY_PROFILE_DRAFT);
 	}
-	function removeProfile(idx: number) {
-		onChange((p) => ({ ...p, profiles: p.profiles.filter((_, i) => i !== idx) }));
+
+	function startEdit(id: string) {
+		const p = value.profiles.find((pr) => pr.id === id);
+		if (!p) return;
+		setDraft(p);
+		setEditingId(id);
 	}
-	function updateProfile(idx: number, patch: Partial<UserProfile>) {
-		onChange((p) => ({
-			...p,
-			profiles: p.profiles.map((pr, i) => (i === idx ? { ...pr, ...patch } : pr)),
-		}));
+
+	function cancelEdit() {
+		setEditingId(null);
+		setDraft(EMPTY_PROFILE_DRAFT);
 	}
-	const addBtn = (
-		<Button type="button" variant="outline" size="sm" className="h-8" onClick={addProfile}>
-			<PlusIcon />
-			Add
-		</Button>
-	);
+
+	function removeProfile(id: string) {
+		onChange((p) => ({ ...p, profiles: p.profiles.filter((pr) => pr.id !== id) }));
+		if (editingId === id) {
+			setEditingId(null);
+			setDraft(EMPTY_PROFILE_DRAFT);
+		}
+	}
+
 	return (
 		<Card className="h-full">
-			<SectionHeader icon={UsersRoundIcon} title="Profiles" action={addBtn} />
+			<SectionHeader icon={UsersRoundIcon} title="Profiles" />
 			<CardContent>
-				{value.profiles.length === 0 ? (
-					<EmptyHint>No profiles yet. Click Add to create one.</EmptyHint>
-				) : (
-					<ul className="flex gap-3 overflow-x-auto pb-2">
-						{value.profiles.map((p, i) => (
-							<li key={p.id} className="flex w-[280px] shrink-0 flex-col gap-3 rounded-lg border p-3">
-								<div className="flex items-center justify-between border-b pb-3">
-									<span className="text-sm font-medium text-muted-foreground">
-										Profile {i + 1}
-									</span>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon-sm"
-										className="size-7 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
-										onClick={() => removeProfile(i)}
-										aria-label={`Remove profile ${i + 1}`}
-									>
-										<Trash2Icon />
-									</Button>
-								</div>
-								<FormRow label="Name">
-									<Input value={p.name} onChange={(e) => updateProfile(i, { name: e.target.value })} />
-								</FormRow>
-								<FormRow label="Character">
-									<Select
-										value={p.character}
-										onValueChange={(v) => updateProfile(i, { character: v as ProfileCharacter })}
-									>
-										<SelectTrigger className="w-full">
-											<SelectValue placeholder="Character" />
-										</SelectTrigger>
-										<SelectContent>
-											{PROFILE_CHARACTERS.map((c) => (
-												<SelectItem key={c} value={c}>
-													{c}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</FormRow>
-								<FormRow label="Birthday">
-									<Input
-										type="date"
-										value={p.birthdate.slice(0, 10)}
-										onChange={(e) => updateProfile(i, { birthdate: e.target.value })}
-									/>
-								</FormRow>
-							</li>
-						))}
-					</ul>
-				)}
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
+					{/* Draft form (left) */}
+					<div className="flex flex-col gap-3 rounded-lg border bg-background p-4">
+						<FormRow label="Name">
+							<Input
+								value={draft.name}
+								onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+							/>
+						</FormRow>
+						<FormRow label="Character">
+							<Select
+								value={draft.character}
+								onValueChange={(v) =>
+									setDraft((d) => ({ ...d, character: v as ProfileCharacter }))
+								}
+							>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="Character" />
+								</SelectTrigger>
+								<SelectContent>
+									{PROFILE_CHARACTERS.map((c) => (
+										<SelectItem key={c} value={c}>
+											{c}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</FormRow>
+						<FormRow label="Birthday">
+							<Input
+								type="date"
+								value={(draft.birthdate ?? '').slice(0, 10)}
+								onChange={(e) => setDraft((d) => ({ ...d, birthdate: e.target.value }))}
+							/>
+						</FormRow>
+						<div className="mt-1 flex items-center gap-2">
+							{editingId ? (
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="h-9 flex-1"
+									onClick={cancelEdit}
+								>
+									Cancel
+								</Button>
+							) : null}
+							<Button
+								type="button"
+								size="sm"
+								className="h-9 flex-1 bg-[#224089] text-white hover:bg-[#1b3470] disabled:opacity-50"
+								onClick={commitDraft}
+								disabled={!draft.name.trim()}
+							>
+								<PlusIcon />
+								{editingId ? 'Update' : 'Add'}
+							</Button>
+						</div>
+					</div>
+
+					{/* Profiles table (right) */}
+					<div
+						className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card"
+						style={{ contain: 'size', containIntrinsicSize: '0 0' }}
+					>
+						<div className="min-h-0 flex-1 overflow-auto">
+							<Table>
+								<TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:border-b [&_th]:bg-muted [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
+									<TableRow>
+										<TableHead>Name</TableHead>
+										<TableHead>Character</TableHead>
+										<TableHead>Birthday</TableHead>
+										<TableHead className="w-[100px] text-right">Action</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody className="[&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_tr]:bg-card">
+									{value.profiles.length === 0 ? (
+										<TableRow>
+											<TableCell
+												colSpan={4}
+												className="py-10 text-center text-sm text-muted-foreground"
+											>
+												No profiles yet. Use the form on the left to add one.
+											</TableCell>
+										</TableRow>
+									) : (
+										value.profiles.map((p) => (
+											<TableRow
+												key={p.id}
+												data-state={editingId === p.id ? 'selected' : undefined}
+											>
+												<TableCell className="text-sm font-medium text-foreground">
+													{p.name || <span className="text-muted-foreground/60">—</span>}
+												</TableCell>
+												<TableCell className="text-sm">{p.character}</TableCell>
+												<TableCell className="text-sm">
+													{p.birthdate || (
+														<span className="text-muted-foreground/60">—</span>
+													)}
+												</TableCell>
+												<TableCell className="text-right">
+													<div className="flex justify-end gap-1">
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															className="size-8 text-muted-foreground hover:bg-[#224089]/10 hover:text-[#224089]"
+															onClick={() => startEdit(p.id)}
+															aria-label={`Edit profile ${p.name || ''}`}
+														>
+															<PencilIcon />
+														</Button>
+														<Button
+															type="button"
+															variant="ghost"
+															size="icon-sm"
+															className="size-8 text-muted-foreground hover:bg-[#E8536A]/10 hover:text-[#E8536A]"
+															onClick={() => removeProfile(p.id)}
+															aria-label={`Delete profile ${p.name || ''}`}
+														>
+															<Trash2Icon />
+														</Button>
+													</div>
+												</TableCell>
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
+						</div>
+					</div>
+				</div>
 			</CardContent>
 		</Card>
 	);

@@ -7,6 +7,7 @@ import {
 	CheckIcon,
 	CreditCardIcon,
 	IdCardIcon,
+	InfoIcon,
 	KeyRoundIcon,
 	MapPinIcon,
 	PencilIcon,
@@ -19,12 +20,18 @@ import {
 import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { PageHeader } from '@/components/page-header';
+import {
+	UserDetailsFormSection,
+	type NewUserFormValue,
+} from '@/components/user-form-sections';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusSwitch } from '@/components/status-switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
@@ -47,12 +54,26 @@ import {
 
 type Params = Promise<{ id: string }>;
 
-type LayoutMode = 'merged' | 'tabs-old' | 'bento-old';
+type LayoutMode = 'merged' | 'tabs-old' | 'bento-old' | 'compact';
 
-// Old-design demos live at the bottom of the list (lowest IDs).
+// Iteration mapping (rows ordered ascending by ID; default sort is ascending).
+// 932301–932309 (rows 1-9): merged layout with compact field grids (Details / Address)
+// 932310 (row 10): old 8-tab layout (fully filled demo)
+// 932311 (row 11): old 8-tab layout (empty state demo)
+// 932312 (row 12): old bento mosaic layout (fully filled demo)
 const LAYOUT_OVERRIDES: Record<string, LayoutMode> = {
-	'932294': 'tabs-old',
-	'932293': 'bento-old',
+	'932301': 'compact',
+	'932302': 'compact',
+	'932303': 'compact',
+	'932304': 'compact',
+	'932305': 'compact',
+	'932306': 'compact',
+	'932307': 'compact',
+	'932308': 'compact',
+	'932309': 'compact',
+	'932310': 'tabs-old',
+	'932311': 'tabs-old',
+	'932312': 'bento-old',
 };
 
 const tabTriggerClass = 'data-active:text-[#224089] after:bg-[#224089] dark:data-active:text-[#4664E1]';
@@ -62,7 +83,11 @@ const TABS = [
 	{ value: 'partner-data', label: 'Partner Data' },
 	{ value: 'subscription', label: 'Subscription' },
 	{ value: 'invoice-reports', label: 'Invoice Reports' },
+	{ value: 'additional-info', label: 'Additional Information' },
 ] as const;
+
+// In edit mode, Invoice Reports is hidden — invoice reports are read-only logs.
+const EDIT_TABS = TABS.filter((t) => t.value !== 'invoice-reports');
 
 const TABS_OLD = [
 	{ value: 'details', label: 'Details' },
@@ -114,7 +139,59 @@ export default function UserDetailPage({ params }: { params: Params }) {
 	}
 
 	const layoutMode: LayoutMode = LAYOUT_OVERRIDES[id] ?? 'merged';
-	const isScrollSpy = layoutMode === 'merged' && editing;
+	const isMergedLike = layoutMode === 'merged' || layoutMode === 'compact';
+	const isCompact = layoutMode === 'compact';
+	const isScrollSpy = isMergedLike && editing;
+
+	// Adapter: edit mode reuses the create-flow UserDetailsFormSection, which
+	// expects a NewUserFormValue. Map UserDetail ⇄ NewUserFormValue.
+	const formValue: NewUserFormValue = React.useMemo(
+		() => ({
+			firstName: user.firstName ?? '',
+			lastName: user.lastName ?? '',
+			kiwiLegacyAccountUuid: user.kiwiLegacyAccountUuid ?? '',
+			isActive: user.isActive,
+			identityDocuments: user.identityDocuments,
+			credentials: user.credentials,
+			profiles: user.profiles,
+			address:
+				user.address ?? { line1: '', city: '', cityCode: '', state: '', country: '', zip: '' },
+			partnerData: user.partnerData,
+		}),
+		[user],
+	);
+	const setFormValue: React.Dispatch<React.SetStateAction<NewUserFormValue>> = (updater) => {
+		setUser((prev) => {
+			const prevForm: NewUserFormValue = {
+				firstName: prev.firstName ?? '',
+				lastName: prev.lastName ?? '',
+				kiwiLegacyAccountUuid: prev.kiwiLegacyAccountUuid ?? '',
+				isActive: prev.isActive,
+				identityDocuments: prev.identityDocuments,
+				credentials: prev.credentials,
+				profiles: prev.profiles,
+				address:
+					prev.address ?? { line1: '', city: '', cityCode: '', state: '', country: '', zip: '' },
+				partnerData: prev.partnerData,
+			};
+			const next =
+				typeof updater === 'function'
+					? (updater as (p: NewUserFormValue) => NewUserFormValue)(prevForm)
+					: updater;
+			return {
+				...prev,
+				firstName: next.firstName || null,
+				lastName: next.lastName || null,
+				kiwiLegacyAccountUuid: next.kiwiLegacyAccountUuid || null,
+				isActive: next.isActive,
+				identityDocuments: next.identityDocuments,
+				credentials: next.credentials,
+				profiles: next.profiles,
+				address: next.address,
+				partnerData: next.partnerData,
+			};
+		});
+	};
 
 	const setSectionRef = (key: string) => (el: HTMLElement | null) => {
 		sectionRefs.current[key] = el;
@@ -138,7 +215,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 		if (!isScrollSpy) return;
 		const root = scrollerRef.current;
 		if (!root) return;
-		const ids = TABS.map((t) => t.value);
+		const ids = EDIT_TABS.map((t) => t.value);
 		function update() {
 			if (isClickScrollingRef.current) return;
 			const rootEl = root!;
@@ -193,7 +270,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 					<div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
 						<Tabs value={activeTab} onValueChange={handleTabChange}>
 							<TabsList variant="line" className="scrollbar-hidden !h-11 -mx-1 gap-2 overflow-x-auto px-1">
-								{TABS.map((t) => (
+								{EDIT_TABS.map((t) => (
 									<TabsTrigger key={t.value} value={t.value} className={cn('px-3 text-sm', tabTriggerClass)}>
 										{t.label}
 									</TabsTrigger>
@@ -208,7 +285,7 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							className="scroll-mt-24"
 							aria-label="User Details"
 						>
-							<UserDetailsTab user={user} setUser={setUser} editing />
+							<UserDetailsFormSection value={formValue} onChange={setFormValue} />
 						</section>
 						<section
 							id="partner-data"
@@ -227,12 +304,12 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							<SubscriptionsCard user={user} />
 						</section>
 						<section
-							id="invoice-reports"
-							ref={setSectionRef('invoice-reports')}
+							id="additional-info"
+							ref={setSectionRef('additional-info')}
 							className="scroll-mt-24"
-							aria-label="Invoice Reports"
+							aria-label="Additional Information"
 						>
-							<InvoiceReportsCard user={user} />
+							<AdditionalInfoCard user={user} setUser={setUser} editing />
 						</section>
 					</div>
 				</main>
@@ -261,16 +338,19 @@ export default function UserDetailPage({ params }: { params: Params }) {
 							</TabsList>
 
 							<TabsContent value="user-details">
-								<UserDetailsTab user={user} setUser={setUser} editing={editing} />
-							</TabsContent>
-							<TabsContent value="subscription">
-								<SubscriptionsCard user={user} />
+								<UserDetailsTab user={user} setUser={setUser} editing={editing} compact={isCompact} />
 							</TabsContent>
 							<TabsContent value="partner-data">
 								<PartnerDataCard user={user} setUser={setUser} editing={editing} />
 							</TabsContent>
+							<TabsContent value="subscription">
+								<SubscriptionsCard user={user} />
+							</TabsContent>
 							<TabsContent value="invoice-reports">
 								<InvoiceReportsCard user={user} />
+							</TabsContent>
+							<TabsContent value="additional-info">
+								<AdditionalInfoCard user={user} setUser={setUser} editing={editing} />
 							</TabsContent>
 						</Tabs>
 					)}
@@ -354,15 +434,20 @@ type LayoutProps = {
 	editing: boolean;
 };
 
-function UserDetailsTab({ user, setUser, editing }: LayoutProps) {
+function UserDetailsTab({
+	user,
+	setUser,
+	editing,
+	compact = false,
+}: LayoutProps & { compact?: boolean }) {
 	if (editing) {
-		// Edit mode: Details + Identity + Credentials in one row; Profiles + Address full width below.
+		// Edit mode: Details + Identity in 30/70 row; Profiles + Address full width below.
+		// Credentials is hidden — populated by the Herald API, not user-facing.
 		return (
 			<div className="flex flex-col gap-4">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+				<div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[3fr_7fr]">
 					<DetailsCard user={user} setUser={setUser} editing={editing} />
 					<IdentityCard user={user} setUser={setUser} editing={editing} />
-					<CredentialsCard user={user} setUser={setUser} editing={editing} />
 				</div>
 				<ProfilesCard user={user} setUser={setUser} editing={editing} />
 				<AddressCard user={user} setUser={setUser} editing={editing} />
@@ -372,14 +457,13 @@ function UserDetailsTab({ user, setUser, editing }: LayoutProps) {
 	return (
 		<div className="grid grid-cols-12 gap-4">
 			<div className="col-span-12 md:col-span-7">
-				<DetailsCard user={user} setUser={setUser} editing={editing} />
+				<DetailsCard user={user} setUser={setUser} editing={editing} compact={compact} />
 			</div>
-			<div className="col-span-12 flex flex-col gap-4 md:col-span-5">
+			<div className="col-span-12 md:col-span-5">
 				<IdentityCard user={user} setUser={setUser} editing={editing} />
-				<CredentialsCard user={user} setUser={setUser} editing={editing} />
 			</div>
 			<div className="col-span-12 md:col-span-6">
-				<AddressCard user={user} setUser={setUser} editing={editing} />
+				<AddressCard user={user} setUser={setUser} editing={editing} compact={compact} />
 			</div>
 			<div className="col-span-12 md:col-span-6">
 				<ProfilesCard user={user} setUser={setUser} editing={editing} />
@@ -420,10 +504,10 @@ function TabsLayoutOld({ user, setUser, editing }: LayoutProps) {
 				<CredentialsCard user={user} setUser={setUser} editing={editing} />
 			</TabsContent>
 			<TabsContent value="subscriptions">
-				<SubscriptionsCard user={user} />
+				<SubscriptionsCard user={user} legacy />
 			</TabsContent>
 			<TabsContent value="invoice-reports">
-				<InvoiceReportsCard user={user} />
+				<InvoiceReportsCard user={user} legacy />
 			</TabsContent>
 		</Tabs>
 	);
@@ -441,7 +525,7 @@ function BentoLayoutOld({ user, setUser, editing }: LayoutProps) {
 				<QuickStatsCard user={user} />
 			</div>
 			<div className="col-span-12 lg:col-span-8">
-				<SubscriptionsCard user={user} />
+				<SubscriptionsCard user={user} legacy />
 			</div>
 			<div className="col-span-12 lg:col-span-4">
 				<ProfilesCard user={user} setUser={setUser} editing={editing} />
@@ -459,7 +543,7 @@ function BentoLayoutOld({ user, setUser, editing }: LayoutProps) {
 				<PartnerDataCard user={user} setUser={setUser} editing={editing} />
 			</div>
 			<div className="col-span-12 lg:col-span-4">
-				<InvoiceReportsCard user={user} />
+				<InvoiceReportsCard user={user} legacy />
 			</div>
 		</div>
 	);
@@ -506,7 +590,7 @@ type EditableCardProps = {
 	editing: boolean;
 };
 
-type ReadOnlyCardProps = { user: UserDetail };
+type ReadOnlyCardProps = { user: UserDetail; legacy?: boolean };
 
 function CardIcon({ icon: Icon }: { icon: React.ComponentType<{ className?: string }> }) {
 	return (
@@ -580,11 +664,21 @@ function dateOnly(s: string | null | undefined) {
 
 // ───────────────────────────── Details ─────────────────────────────
 
-function DetailsCard({ user, setUser, editing }: EditableCardProps) {
+function DetailsCard({
+	user,
+	setUser,
+	editing,
+	compact = false,
+}: EditableCardProps & { compact?: boolean }) {
+	const showCompact = compact && !editing;
 	return (
 		<Card className="h-full">
 			<SectionHeader icon={UserIcon} title="Details" />
-			<CardContent className="flex flex-col gap-5">
+			<CardContent
+				className={cn(
+					showCompact ? 'grid grid-cols-2 gap-x-6 gap-y-5' : 'flex flex-col gap-5',
+				)}
+			>
 				{editing && setUser ? (
 					<>
 						<FormRow label="First Name">
@@ -599,23 +693,11 @@ function DetailsCard({ user, setUser, editing }: EditableCardProps) {
 								onChange={(e) => setUser((p) => ({ ...p, lastName: e.target.value || null }))}
 							/>
 						</FormRow>
-						<FormRow label="Kiwi Legacy Account UUID">
-							<Input
-								value={user.kiwiLegacyAccountUuid ?? ''}
-								onChange={(e) =>
-									setUser((p) => ({ ...p, kiwiLegacyAccountUuid: e.target.value || null }))
-								}
-								placeholder="00000000-0000-0000-0000-000000000000"
+						<FormRow label="Status" required>
+							<StatusSwitch
+								active={user.isActive}
+								onChange={(v) => setUser((p) => ({ ...p, isActive: v }))}
 							/>
-						</FormRow>
-						<FormRow label="Is Active">
-							<label className="flex items-center gap-2 text-sm">
-								<Checkbox
-									checked={user.isActive}
-									onCheckedChange={(v) => setUser((p) => ({ ...p, isActive: v === true }))}
-								/>
-								<span>{user.isActive ? 'Active' : 'Inactive'}</span>
-							</label>
 						</FormRow>
 					</>
 				) : (
@@ -625,18 +707,42 @@ function DetailsCard({ user, setUser, editing }: EditableCardProps) {
 						</ReadField>
 						<ReadField label="First Name">{user.firstName ?? <NA />}</ReadField>
 						<ReadField label="Last Name">{user.lastName ?? <NA />}</ReadField>
-						<ReadField label="Kiwi Legacy Account UUID">
-							{user.kiwiLegacyAccountUuid ? (
-								<span className="font-mono">{user.kiwiLegacyAccountUuid}</span>
-							) : (
-								<NA />
-							)}
-						</ReadField>
 						<ReadField label="Created">{formatTimestamp(user.createdAt)}</ReadField>
 						<ReadField label="Updated">
 							{user.updatedAt ? formatTimestamp(user.updatedAt) : <NA />}
 						</ReadField>
 					</>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+// ───────────────────────────── Additional Information ─────────────────────────────
+
+function AdditionalInfoCard({ user, setUser, editing }: EditableCardProps) {
+	return (
+		<Card className="h-full">
+			<SectionHeader icon={InfoIcon} title="Additional Information" />
+			<CardContent className="flex flex-col gap-5">
+				{editing && setUser ? (
+					<FormRow label="Kiwi Legacy Account UUID">
+						<Input
+							value={user.kiwiLegacyAccountUuid ?? ''}
+							onChange={(e) =>
+								setUser((p) => ({ ...p, kiwiLegacyAccountUuid: e.target.value || null }))
+							}
+							placeholder="00000000-0000-0000-0000-000000000000"
+						/>
+					</FormRow>
+				) : (
+					<ReadField label="Kiwi Legacy Account UUID">
+						{user.kiwiLegacyAccountUuid ? (
+							<span className="break-all font-mono">{user.kiwiLegacyAccountUuid}</span>
+						) : (
+							<NA />
+						)}
+					</ReadField>
 				)}
 			</CardContent>
 		</Card>
@@ -720,9 +826,12 @@ function ProfilesCard({ user, setUser, editing }: EditableCardProps) {
 	}
 
 	return (
-		<Card className="h-full">
+		<Card
+			className={cn('flex flex-col overflow-hidden', !editing && 'h-full')}
+			style={!editing ? { contain: 'size', containIntrinsicSize: '0 0' } : undefined}
+		>
 			<SectionHeader icon={UsersRoundIcon} title="Profiles" />
-			<CardContent>
+			<CardContent className={cn(!editing && 'min-h-0 flex-1 overflow-hidden')}>
 				{editing && setUser ? (
 					user.profiles.length === 0 ? (
 						<EmptyHint>No profiles found for this user.</EmptyHint>
@@ -782,7 +891,7 @@ function ProfilesCard({ user, setUser, editing }: EditableCardProps) {
 				) : user.profiles.length === 0 ? (
 					<EmptyHint>No profiles found for this user.</EmptyHint>
 				) : (
-					<ul className="flex flex-col divide-y divide-border">
+					<ul className="flex h-full flex-col divide-y divide-border overflow-y-auto pr-1">
 						{user.profiles.map((p, i) => (
 							<li key={p.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
 								<ProfileAvatar index={i} name={p.name} />
@@ -821,8 +930,14 @@ const EMPTY_ADDRESS: UserAddress = {
 	zip: '',
 };
 
-function AddressCard({ user, setUser, editing }: EditableCardProps) {
+function AddressCard({
+	user,
+	setUser,
+	editing,
+	compact = false,
+}: EditableCardProps & { compact?: boolean }) {
 	const a = user.address ?? EMPTY_ADDRESS;
+	const showCompact = compact && !editing && !!user.address;
 	return (
 		<Card className="h-full">
 			<SectionHeader icon={MapPinIcon} title="Address" />
@@ -845,6 +960,17 @@ function AddressCard({ user, setUser, editing }: EditableCardProps) {
 					</div>
 				) : !user.address ? (
 					<EmptyHint tone="warning">User Address is missing.</EmptyHint>
+				) : showCompact ? (
+					<div className="grid grid-cols-3 gap-x-6 gap-y-5">
+						<div className="col-span-3">
+							<ReadField label="Line 1">{user.address?.line1 || <NA />}</ReadField>
+						</div>
+						<ReadField label="City">{user.address?.city || <NA />}</ReadField>
+						<ReadField label="City Code">{user.address?.cityCode || <NA />}</ReadField>
+						<ReadField label="Zip Code">{user.address?.zip || <NA />}</ReadField>
+						<ReadField label="State">{user.address?.state || <NA />}</ReadField>
+						<ReadField label="Country">{user.address?.country || <NA />}</ReadField>
+					</div>
 				) : (
 					<div className="flex flex-col gap-5">
 						{ADDRESS_FIELDS.map(({ key, label }) => (
@@ -956,14 +1082,19 @@ function IdentityCard({ user, setUser, editing }: EditableCardProps) {
 						{user.identityDocuments.map((d, i) => (
 							<li
 								key={i}
-								className="flex shrink-0 items-center justify-between gap-4 rounded-lg border bg-muted/30 px-4 py-3"
+								className="flex shrink-0 items-center justify-between gap-3 rounded-lg bg-muted/40 p-4"
 							>
-								<span className="break-all font-mono text-sm font-medium text-foreground">
-									{d.code}
-								</span>
+								<div className="flex min-w-0 flex-col gap-1.5">
+									<span className="text-xs font-medium text-muted-foreground">
+										Identity Code
+									</span>
+									<span className="break-all font-mono text-sm font-medium text-foreground">
+										{d.code}
+									</span>
+								</div>
 								<Badge
 									variant="outline"
-									className="shrink-0 border-[#4664E1]/30 bg-[#4664E1]/10 uppercase text-[#4664E1]"
+									className="shrink-0 rounded-full border-border bg-background px-3 text-foreground/70 uppercase tracking-wide"
 								>
 									{identityKindLabel(d.kind)}
 								</Badge>
@@ -1077,7 +1208,7 @@ function CredentialsCard({ user, setUser, editing }: EditableCardProps) {
 
 // ───────────────────────────── Subscriptions ─────────────────────────────
 
-function SubscriptionsCard({ user }: ReadOnlyCardProps) {
+function SubscriptionsCard({ user, legacy }: ReadOnlyCardProps) {
 	return (
 		<Card className="h-full">
 			<SectionHeader icon={CreditCardIcon} title="Subscriptions" />
@@ -1120,12 +1251,6 @@ function SubscriptionsCard({ user }: ReadOnlyCardProps) {
 										<Button variant="outline" size="sm" className="h-8">
 											Re-Verify Subscription
 										</Button>
-										<Button
-											size="sm"
-											className="h-8 bg-[#224089] text-white hover:bg-[#1b3470]"
-										>
-											Create Subscription Period
-										</Button>
 									</div>
 								</div>
 								<div className="text-sm">
@@ -1134,15 +1259,83 @@ function SubscriptionsCard({ user }: ReadOnlyCardProps) {
 								</div>
 								<div className="flex flex-col gap-2">
 									<span className="text-sm font-medium text-foreground">Subscription Period:</span>
-									{s.periods.length === 0 ? (
-										<span className="text-sm italic text-muted-foreground">
-											No periods recorded yet.
-										</span>
+									{legacy ? (
+										s.periods.length === 0 ? (
+											<span className="text-sm italic text-muted-foreground">
+												No periods recorded yet.
+											</span>
+										) : (
+											<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+												{s.periods.map((p) => (
+													<div
+														key={p.id}
+														className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-sm"
+													>
+														<div className="flex items-baseline gap-1.5">
+															<span className="font-medium text-muted-foreground">ID:</span>
+															<span className="font-semibold text-[#224089]">{p.id}</span>
+														</div>
+														<div className="flex flex-col gap-0.5 text-foreground">
+															<span>{formatTimestamp(p.startsAt)}</span>
+															<span>{formatTimestamp(p.endsAt)}</span>
+														</div>
+														<div className="flex flex-col gap-0.5">
+															<span className="text-xs font-medium text-muted-foreground">
+																Transaction ID
+															</span>
+															<span className="break-all text-foreground">
+																{p.transactionId ?? (
+																	<span className="text-muted-foreground/60">—</span>
+																)}
+															</span>
+														</div>
+													</div>
+												))}
+											</div>
+										)
 									) : (
-										<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-											{s.periods.map((p) => (
-												<SubscriptionPeriodCard key={p.id} period={p} />
-											))}
+										<div className="overflow-hidden rounded-lg border bg-card">
+											<Table>
+												<TableHeader className="[&_th]:border-b [&_th]:bg-muted [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
+													<TableRow>
+														<TableHead className="w-[120px]">ID</TableHead>
+														<TableHead>Start Date</TableHead>
+														<TableHead>End Date</TableHead>
+														<TableHead>Transaction ID</TableHead>
+													</TableRow>
+												</TableHeader>
+												<TableBody className="[&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_tr]:bg-card">
+													{s.periods.length === 0 ? (
+														<TableRow>
+															<TableCell
+																colSpan={4}
+																className="py-6 text-center text-sm italic text-muted-foreground"
+															>
+																No periods recorded yet.
+															</TableCell>
+														</TableRow>
+													) : (
+														s.periods.map((p) => (
+															<TableRow key={p.id}>
+																<TableCell className="text-sm font-semibold text-[#224089]">
+																	{p.id}
+																</TableCell>
+																<TableCell className="text-sm text-foreground">
+																	{formatTimestamp(p.startsAt)}
+																</TableCell>
+																<TableCell className="text-sm text-foreground">
+																	{formatTimestamp(p.endsAt)}
+																</TableCell>
+																<TableCell className="break-all font-mono text-sm text-foreground">
+																	{p.transactionId ?? (
+																		<span className="text-muted-foreground/60">—</span>
+																	)}
+																</TableCell>
+															</TableRow>
+														))
+													)}
+												</TableBody>
+											</Table>
 										</div>
 									)}
 								</div>
@@ -1155,34 +1348,69 @@ function SubscriptionsCard({ user }: ReadOnlyCardProps) {
 	);
 }
 
-function SubscriptionPeriodCard({
-	period,
-}: {
-	period: { id: string; startsAt: string; endsAt: string; transactionId?: string };
-}) {
-	return (
-		<div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-			<div className="flex items-baseline gap-1.5">
-				<span className="font-medium text-muted-foreground">ID:</span>
-				<span className="font-semibold text-[#224089]">{period.id}</span>
-			</div>
-			<div className="flex flex-col gap-0.5 text-foreground">
-				<span>{formatTimestamp(period.startsAt)}</span>
-				<span>{formatTimestamp(period.endsAt)}</span>
-			</div>
-			<div className="flex flex-col gap-0.5">
-				<span className="text-xs font-medium text-muted-foreground">Transaction ID</span>
-				<span className="break-all text-foreground">
-					{period.transactionId ?? <span className="text-muted-foreground/60">—</span>}
-				</span>
-			</div>
-		</div>
-	);
-}
-
 // ───────────────────────────── Invoice Reports ─────────────────────────────
 
-function InvoiceReportsCard({ user }: ReadOnlyCardProps) {
+function InvoiceReportsCard({ user, legacy }: ReadOnlyCardProps) {
+	if (legacy) {
+		return (
+			<Card className="h-full">
+				<SectionHeader icon={BadgeCheckIcon} title="Invoice Reports" />
+				<CardContent>
+					{user.invoiceReports.length === 0 ? (
+						<EmptyHint>No invoice reports found for this user.</EmptyHint>
+					) : (
+						<ul className="flex flex-col divide-y divide-border">
+							{user.invoiceReports.map((r) => (
+								<li key={r.id} className="py-4 first:pt-0 last:pb-0">
+									<div className="flex flex-col gap-2">
+										<div className="text-sm">
+											<span className="font-medium">Invoice Report ID:</span>{' '}
+											<span className="font-medium text-[#224089]">{r.id}</span>
+										</div>
+										<dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+											<LegacyKV label="Order Number" value={r.orderNumber} />
+											<LegacyKV
+												label="Subscription Period ID"
+												value={<span className="text-[#224089]">{r.subscriptionPeriodId}</span>}
+											/>
+											<LegacyKV
+												label="Subscription Period"
+												value={`${formatTimestamp(r.subscriptionPeriodStart)} – ${formatTimestamp(r.subscriptionPeriodEnd)}`}
+												span={2}
+											/>
+											<LegacyKV label="Transaction ID" value={r.transactionId} />
+											<LegacyKV
+												label="Is Confirmed"
+												value={
+													r.isConfirmed ? (
+														<span className="font-semibold text-[#00B86E]">✓</span>
+													) : (
+														<span className="font-semibold text-[#E8536A]">✕</span>
+													)
+												}
+											/>
+											<LegacyKV
+												label="Is Sent"
+												value={
+													r.isSent ? (
+														<span className="font-semibold text-[#00B86E]">✓</span>
+													) : (
+														<span className="font-semibold text-[#E8536A]">✕</span>
+													)
+												}
+											/>
+											<LegacyKV label="Created At" value={formatTimestampWithTz(r.createdAt)} />
+											<LegacyKV label="Updated At" value={formatTimestampWithTz(r.updatedAt)} />
+										</dl>
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</CardContent>
+			</Card>
+		);
+	}
 	return (
 		<Card className="h-full">
 			<SectionHeader icon={BadgeCheckIcon} title="Invoice Reports" />
@@ -1190,48 +1418,85 @@ function InvoiceReportsCard({ user }: ReadOnlyCardProps) {
 				{user.invoiceReports.length === 0 ? (
 					<EmptyHint>No invoice reports found for this user.</EmptyHint>
 				) : (
-					<ul className="flex flex-col divide-y divide-border">
+					<div className="flex flex-col gap-3">
 						{user.invoiceReports.map((r) => (
-							<li key={r.id} className="py-4 first:pt-0 last:pb-0">
-								<InvoiceReportRow report={r} />
-							</li>
+							<InvoiceReportItemCard key={r.id} report={r} />
 						))}
-					</ul>
+					</div>
 				)}
 			</CardContent>
 		</Card>
 	);
 }
 
-function InvoiceReportRow({ report }: { report: InvoiceReport }) {
+function InvoiceReportItemCard({ report }: { report: InvoiceReport }) {
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="text-sm">
-				<span className="font-medium">Invoice Report ID:</span>{' '}
-				<span className="font-medium text-[#224089]">{report.id}</span>
+		<div className="rounded-lg border bg-card p-4">
+			<div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+				<span className="text-sm">
+					<span className="font-medium text-muted-foreground">Invoice Report ID:</span>{' '}
+					<span className="font-semibold text-[#224089]">{report.id}</span>
+				</span>
+				<div className="flex items-center gap-2">
+					<Badge
+						variant="outline"
+						className={cn(
+							'gap-1.5',
+							report.isConfirmed
+								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
+								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
+						)}
+					>
+						<span
+							className="size-1.5 rounded-full"
+							style={{ backgroundColor: report.isConfirmed ? '#00B86E' : '#E8536A' }}
+						/>
+						{report.isConfirmed ? 'Confirmed' : 'Unconfirmed'}
+					</Badge>
+					<Badge
+						variant="outline"
+						className={cn(
+							'gap-1.5',
+							report.isSent
+								? 'border-[#00B86E]/30 bg-[#00B86E]/10 text-[#00B86E]'
+								: 'border-[#E8536A]/30 bg-[#E8536A]/10 text-[#E8536A]',
+						)}
+					>
+						<span
+							className="size-1.5 rounded-full"
+							style={{ backgroundColor: report.isSent ? '#00B86E' : '#E8536A' }}
+						/>
+						{report.isSent ? 'Sent' : 'Unsent'}
+					</Badge>
+				</div>
 			</div>
-			<dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-				<KeyValue label="Order Number" value={report.orderNumber} />
-				<KeyValue
-					label="Subscription Period ID"
-					value={<span className="text-[#224089]">{report.subscriptionPeriodId}</span>}
-				/>
-				<KeyValue
-					label="Subscription Period"
-					value={`${formatTimestamp(report.subscriptionPeriodStart)} – ${formatTimestamp(report.subscriptionPeriodEnd)}`}
-					span={2}
-				/>
-				<KeyValue label="Transaction ID" value={report.transactionId} />
-				<KeyValue label="Is Confirmed" value={report.isConfirmed ? <CheckMark /> : <Cross />} />
-				<KeyValue label="Is Sent" value={report.isSent ? <CheckMark /> : <Cross />} />
-				<KeyValue label="Created At" value={formatTimestampWithTz(report.createdAt)} />
-				<KeyValue label="Updated At" value={formatTimestampWithTz(report.updatedAt)} />
-			</dl>
+			<div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				<ReadField label="Order Number">
+					<span className="font-mono">{report.orderNumber}</span>
+				</ReadField>
+				<ReadField label="Transaction ID">
+					<span className="break-all font-mono">{report.transactionId}</span>
+				</ReadField>
+				<ReadField label="Subscription Period ID">
+					<span className="font-mono text-[#224089]">{report.subscriptionPeriodId}</span>
+				</ReadField>
+				<ReadField label="Subscription Period">
+					<span className="break-all">
+						{formatTimestamp(report.subscriptionPeriodStart)} – {formatTimestamp(report.subscriptionPeriodEnd)}
+					</span>
+				</ReadField>
+				<ReadField label="Created At">
+					<span className="break-all">{formatTimestampWithTz(report.createdAt)}</span>
+				</ReadField>
+				<ReadField label="Updated At">
+					<span className="break-all">{formatTimestampWithTz(report.updatedAt)}</span>
+				</ReadField>
+			</div>
 		</div>
 	);
 }
 
-function KeyValue({
+function LegacyKV({
 	label,
 	value,
 	span = 1,
@@ -1246,14 +1511,6 @@ function KeyValue({
 			<dd className="text-foreground">{value}</dd>
 		</div>
 	);
-}
-
-function CheckMark() {
-	return <span className="font-semibold text-[#00B86E]">✓</span>;
-}
-
-function Cross() {
-	return <span className="font-semibold text-[#E8536A]">✕</span>;
 }
 
 // ───────────────────────────── helpers ─────────────────────────────

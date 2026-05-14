@@ -2,9 +2,9 @@
 
 import { BuildingIcon, EyeIcon, EyeOffIcon, KeyRoundIcon } from 'lucide-react';
 import * as React from 'react';
+import { StatusSwitch } from '@/components/status-switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 
 export type TenantFormValue = {
 	name: string;
@@ -53,10 +53,7 @@ export function TenantFormSections({ value, onChange }: Props) {
 						<Input value={value.key} onChange={(e) => set('key', e.target.value)} />
 					</FormRow>
 					<FormRow label="Status" required>
-						<div className="flex items-center gap-3">
-							<Switch checked={value.isActive} onCheckedChange={(v) => set('isActive', v)} />
-							<span className="text-sm text-muted-foreground">{value.isActive ? 'Active' : 'Inactive'}</span>
-						</div>
+						<StatusSwitch active={value.isActive} onChange={(v) => set('isActive', v)} />
 					</FormRow>
 				</CardContent>
 			</Card>
